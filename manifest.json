@@ -1,0 +1,17 @@
+{
+  "name": "Venets Flowers",
+  "short_name": "Venets",
+  "description": "Магазин цветов и подарков с доставкой",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090910",
+  "theme_color": "#090910",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%237c3aed'/><text y='130' x='50%' text-anchor='middle' font-size='110'>🌸</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

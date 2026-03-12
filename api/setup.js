@@ -1,64 +1,51 @@
-const BOT_TOKEN  = process.env.BOT_TOKEN;
-const WEBAPP_URL = (process.env.WEBAPP_URL || '').replace(/\/$/, '');
+module.exports = async function (req, res) {
+  const TOKEN = process.env.BOT_TOKEN;
+  const WURL  = (process.env.WEBAPP_URL || '').replace(/\/+$/, '');
 
-module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
 
-  if (!BOT_TOKEN) {
-    return res.status(200).end(JSON.stringify({
-      ok: false, error: 'BOT_TOKEN не задан в Environment Variables!'
-    }));
-  }
-  if (!WEBAPP_URL) {
+  if (!TOKEN || !WURL) {
     return res.status(200).end(JSON.stringify({
       ok: false,
-      error: 'WEBAPP_URL не задан!',
-      fix:   'Добавьте WEBAPP_URL = https://venets-flowers.vercel.app  (без слэша в конце!)'
+      error: 'Нет BOT_TOKEN или WEBAPP_URL',
+      token_ok: !!TOKEN,
+      url_ok: !!WURL
     }));
   }
 
-  const webhookUrl = `${WEBAPP_URL}/api/webhook`;
+  const hookUrl = WURL + '/api/webhook';
 
   try {
-    const setRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
-      method:  'POST',
+    const r = await fetch('https://api.telegram.org/bot' + TOKEN + '/setWebhook', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        url:              webhookUrl,
-        allowed_updates:  ['message', 'callback_query'],
+      body: JSON.stringify({
+        url: hookUrl,
+        allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: true
       })
     });
-    const setResult = await setRes.json();
+    const result = await r.json();
 
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands`, {
-      method:  'POST',
+    await fetch('https://api.telegram.org/bot' + TOKEN + '/setMyCommands', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        commands: [
-          { command: 'start',    description: '🌸 Открыть магазин'          },
-          { command: 'balance',  description: '💰 Мой баланс'               },
-          { command: 'orders',   description: '📦 Мои заказы'               },
-          { command: 'referral', description: '🔗 Реферальная ссылка'       },
-          { command: 'admin',    description: '⚙️ Панель администратора'    }
-        ]
-      })
+      body: JSON.stringify({ commands: [
+        { command: 'start',    description: '🌸 Открыть магазин'       },
+        { command: 'balance',  description: '💰 Мой баланс'            },
+        { command: 'orders',   description: '📦 Мои заказы'            },
+        { command: 'referral', description: '🔗 Реферальная ссылка'    },
+        { command: 'admin',    description: '⚙️ Администратор'         }
+      ]})
     });
 
-    const meRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-    const me    = await meRes.json();
-
     return res.status(200).end(JSON.stringify({
-      ok:          setResult.ok,
-      message:     setResult.ok
-                     ? '✅ Бот успешно настроен! Напишите /start боту @venets_bot'
-                     : '❌ Ошибка регистрации вебхука',
-      webhook_url: webhookUrl,
-      bot:         me.result ? `@${me.result.username}` : 'неизвестен',
-      detail:      setResult
+      ok: result.ok,
+      message: result.ok ? '✅ Готово! Напишите /start боту' : '❌ Ошибка',
+      hook_url: hookUrl,
+      tg_result: result
     }));
   } catch (e) {
-    return res.status(200).end(JSON.stringify({ ok: false, error: String(e.message) }));
+    return res.status(200).end(JSON.stringify({ ok: false, error: e.message }));
   }
 };

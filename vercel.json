@@ -1,6 +1,9 @@
 {
+  "version": 2,
+  "outputDirectory": ".",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/webhook", "destination": "/api/webhook" },
+    { "source": "/api/setup",   "destination": "/api/setup"   },
+    { "source": "/api/status",  "destination": "/api/status"  }
   ]
 }

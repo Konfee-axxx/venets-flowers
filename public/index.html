@@ -16,7 +16,7 @@
   --green:#30d158;--blue:#0a84ff;--pink:#ff375f;--purple:#bf5af2;--gold:#ffd60a;
   --accent:#bf5af2;--safe-b:env(safe-area-inset-bottom,0px);
 }
-html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,'SF Pro Display','SF Pro Text',system-ui,sans-serif;overflow:hidden;touch-action:manipulation;}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,'SF Pro Display','SF Pro Text',system-ui,sans-serif;overflow:hidden;touch-action:pan-y;}
 
 /* СКРОЛЛБАР */
 ::-webkit-scrollbar{width:0;}
@@ -33,7 +33,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 @keyframes gradFlow{0%{background-position:0%}100%{background-position:400%}}
 .grad-text{
   background:linear-gradient(90deg,#bf5af2,#ffd60a,#30d158,#ff375f,#0a84ff,#bf5af2);
-  background-size:400%;animation:gradFlow 5s linear infinite;
+  background-size:400%;animation:gradFlow 12s linear infinite;
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
 }
 .grad-border{
@@ -42,7 +42,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
     linear-gradient(var(--bg3),var(--bg3)) padding-box,
     linear-gradient(90deg,#bf5af2,#ffd60a,#30d158,#ff375f,#0a84ff,#bf5af2) border-box;
   background-size:auto,400%;
-  animation:gradFlow 5s linear infinite;
+  animation:gradFlow 12s linear infinite;
 }
 
 /* ПРИЛОЖЕНИЕ */
@@ -292,7 +292,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
   position:fixed;inset:0;z-index:600;background:var(--bg);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:40px 24px calc(40px + var(--safe-b));
-  animation:fdIn .4s ease;overflow-y:auto;
+  animation:fdIn .4s ease;overflow-y:auto;overflow-x:hidden;
 }
 .ob-emoji{font-size:60px;margin-bottom:20px;animation:float 3s ease-in-out infinite;}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -331,6 +331,19 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 /* СТАТУС */
 .status-pill{display:inline-block;padding:3px 12px;border-radius:100px;font-size:11px;font-weight:700;}
+
+/* СПИННЕР */
+@keyframes spin360{to{transform:rotate(360deg)}}
+
+/* БАННЕР АКТИВНОГО ЗАКАЗА */
+.order-bar{
+  position:sticky;bottom:0;left:0;right:0;
+  background:rgba(12,12,22,.97);
+  backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
+  border-top:0.5px solid var(--border2);
+  padding:10px 14px calc(10px + var(--safe-b));
+  display:flex;align-items:center;gap:10px;cursor:pointer;z-index:90;
+}
 
 /* СЕКЦИЯ ОНБОРДИНГА */
 .ob-full{width:100%;display:flex;flex-direction:column;gap:0;}
@@ -417,9 +430,12 @@ let S = {
   profSec:null,
   adminMode:false,
   adminLogin:false,
+  adminLoginFailed:false,
   adminTab:0,
   notif:null,
   _nt:null,
+  // Оформление заказа
+  checkout:null, // null | {step:1..7, addrIdx:0, receiver:'me'|'other', otherName:'', otherPhone:'', disc:0, total:0, orderId:null, payStatus:null}
 };
 
 try{
@@ -492,6 +508,7 @@ function buildRoot(){
     wrap.appendChild(el('div',{cls:'notif-bar'},[S.notif.ico+' '+S.notif.msg]));
   }
   if(S.onboard){wrap.appendChild(buildOnboard());return wrap;}
+  if(S.checkout){wrap.appendChild(buildCheckout());return wrap;}
   if(S.adminLogin){wrap.appendChild(buildAdminLogin());return wrap;}
   if(S.adminMode){wrap.appendChild(buildAdmin());return wrap;}
   if(S.detail){wrap.appendChild(buildDetail());return wrap;}
@@ -552,6 +569,17 @@ function buildFlowers(){
   const grid=el('div',{cls:'grid'});
   items.forEach(p=>grid.appendChild(buildCard(p,'f')));
   scr.appendChild(grid);
+
+  // Баннер активного заказа
+  const activeOrder=S.orders.find(o=>!['Завершён','Отменён'].includes(o.status));
+  if(activeOrder){
+    const bar=el('div',{cls:'order-bar',onClick:()=>{S.profSec='orders';S.tab=2;render();}});
+    bar.appendChild(el('div',{css:'flex:1;font-size:13px;font-weight:700;'},[txt('Заказ #'+activeOrder.id)]));
+    const pill=el('div',{css:'background:rgba(255,214,10,.15);color:var(--gold);border-radius:100px;padding:4px 12px;font-size:11px;font-weight:700;'});
+    pill.textContent=activeOrder.status;bar.appendChild(pill);
+    scr.appendChild(bar);
+  }
+
   wrap.appendChild(scr);
   return wrap;
 }
@@ -575,9 +603,20 @@ function buildGifts(){
   if(f.minP>0||f.maxP<5000) items=items.filter(i=>i.price>=f.minP&&i.price<=f.maxP);
   items=sortItems(items);
 
-  const grid=el('div',{cls:'grid'});
-  items.forEach(p=>grid.appendChild(buildCard(p,'g')));
-  scr.appendChild(grid);
+  const grid2=el('div',{cls:'grid'});
+  items.forEach(p=>grid2.appendChild(buildCard(p,'g')));
+  scr.appendChild(grid2);
+
+  // Баннер активного заказа
+  const activeOrder2=S.orders.find(o=>!['Завершён','Отменён'].includes(o.status));
+  if(activeOrder2){
+    const bar=el('div',{cls:'order-bar',onClick:()=>{S.profSec='orders';S.tab=2;render();}});
+    bar.appendChild(el('div',{css:'flex:1;font-size:13px;font-weight:700;'},[txt('Заказ #'+activeOrder2.id)]));
+    const pill=el('div',{css:'background:rgba(255,214,10,.15);color:var(--gold);border-radius:100px;padding:4px 12px;font-size:11px;font-weight:700;'});
+    pill.textContent=activeOrder2.status;bar.appendChild(pill);
+    scr.appendChild(bar);
+  }
+
   wrap.appendChild(scr);
   return wrap;
 }
@@ -855,7 +894,10 @@ function buildCart(){
     tr.appendChild(el('span',{css:'font-size:18px;font-weight:800;color:var(--accent);'},[txt((total-disc).toLocaleString('ru')+' ₽')]));
     sum.appendChild(tr);
 
-    const ob=el('button',{cls:'btn-prim',onClick:()=>placeOrder(total-disc,disc)});
+    const ob=el('button',{cls:'btn-prim',onClick:()=>{
+      S.checkout={step:1,addrIdx:0,receiver:'',otherName:'',otherPhone:'',disc:disc,total:total-disc,orderId:null,payStatus:null,msgIdx:0};
+      S.cartOpen=false;render();
+    }});
     ob.textContent='Оформить заказ 🌸';
     sum.appendChild(ob);
     sh.appendChild(sum);
@@ -863,14 +905,291 @@ function buildCart(){
   ov.appendChild(sh);return ov;
 }
 
-function placeOrder(total,disc){
-  const order={id:Date.now(),date:new Date().toLocaleDateString('ru'),items:{...S.cart},total,status:'В обработке',address:S.user.addr||'—'};
+function placeOrder(){
+  const co=S.checkout;
+  const addrs=S.user.addresses||[];
+  const addr=addrs[co.addrIdx]||{};
+  const addrStr=addr.street||S.user.addr||'—';
+  const order={
+    id:Date.now(),
+    date:new Date().toLocaleDateString('ru'),
+    items:{...S.cart},
+    total:co.total,
+    status:'Заказ создан',
+    address:addrStr,
+    receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
+    disc:co.disc
+  };
   S.orders.unshift(order);
-  const earned=Math.floor(total*0.05);
-  if(S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-disc);
-  S.user.petals=(S.user.petals||0)+earned;
-  S.cart={};S.usePetals=false;save();S.cartOpen=false;
-  showNotif('Заказ оформлен! +'+earned+' ☘️');
+  if(S.usePetals&&co.disc>0)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
+  S.cart={};S.usePetals=false;
+  save();
+  return order;
+}
+
+// ══ CHECKOUT FLOW ══════════════════════════════
+const CHECKOUT_MSGS=['Ищем лучший цветок','Ищем в Колумбии','А теперь в Эквадоре','Отправили на самолёте','Уже сел в Шереметьево','Едет на нашу базу','Проверяем каждый цветок','Выбираем лучшее','Нашли идеальные','Ищем упаковку','Начали создавать букет','Аккуратно складываем бутоны','Получается красиво!','Уже собрали букет','Доводим до идеала','Начали искать курьера','Выбираем авто с кондиционером','Нашли лучшего курьера','Уже едет к нам','Завершаем последние штрихи','Почти готово'];
+const PAY_MSGS=['Обрабатывает банк','Заходим в банк','Заходим в операции','Ищем твой платёж','Проверяем','Сверяемся'];
+const BANKS=[
+  {id:'sber',name:'Сбербанк',color:'#21A038',logo:'🟢'},
+  {id:'tbank',name:'Т-Банк',color:'#FFDD2D',tColor:'#333',logo:'🟡'},
+  {id:'alfa',name:'Альфа-Банк',color:'#EF3124',logo:'🔴'},
+];
+
+function buildCheckout(){
+  const co=S.checkout;
+  const page=el('div',{css:'position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;'});
+
+  if(co.step===1) buildCO1(page);
+  else if(co.step===2) buildCO2(page);
+  else if(co.step===3) buildCO3(page);
+  else if(co.step===4) buildCO4(page);
+  else if(co.step===5) buildCO5(page);
+  else if(co.step===6) buildCO6(page);
+  else if(co.step===7) buildCO7(page);
+
+  return page;
+}
+
+function coHdr(title,onBack){
+  const h=el('div',{cls:'hdr'});
+  if(onBack)h.appendChild(el('button',{cls:'back-btn',onClick:onBack},[txt('‹ Назад')]));
+  h.appendChild(el('div',{css:'flex:1;text-align:center;font-size:17px;font-weight:700;'},[txt(title)]));
+  if(onBack)h.appendChild(el('div',{css:'width:70px;'}));
+  return h;
+}
+
+// Шаг 1 — Выбор адреса
+function buildCO1(page){
+  page.appendChild(coHdr('Адрес доставки',()=>{S.checkout=null;S.cartOpen=true;render();}));
+  const scr=el('div',{cls:'scroll',css:'padding:16px 14px 100px;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:16px;'},[txt('На какой адрес доставляем?')]));
+  const addrs=S.user.addresses||[];
+  addrs.forEach((addr,i)=>{
+    const card=el('div',{
+      css:'background:'+(S.checkout.addrIdx===i?'rgba(191,90,242,.12)':'var(--glass)')+';border:1.5px solid '+(S.checkout.addrIdx===i?'var(--accent)':'var(--border)')+';border-radius:18px;padding:16px;margin-bottom:10px;cursor:pointer;',
+      onClick:()=>{S.checkout.addrIdx=i;render();}});
+    card.appendChild(el('div',{css:'font-size:15px;font-weight:700;margin-bottom:3px;'},[addr.street||'Адрес '+(i+1)]));
+    if(addr.entr||addr.floor||addr.apt){
+      const d=[];if(addr.entr)d.push('Подъезд '+addr.entr);if(addr.floor)d.push('Этаж '+addr.floor);if(addr.apt)d.push('Кв. '+addr.apt);
+      card.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);'},[d.join(' · ')]));
+    }
+    if(S.checkout.addrIdx===i)card.appendChild(el('div',{css:'color:var(--accent);font-weight:700;font-size:13px;margin-top:6px;'},[txt('✓ Выбрано')]));
+    scr.appendChild(card);
+  });
+  page.appendChild(scr);
+  const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid var(--border);background:var(--bg);'});
+  const b=el('button',{cls:'btn-prim',onClick:()=>{S.checkout.step=2;render();}});
+  b.textContent='Продолжить →';foot.appendChild(b);page.appendChild(foot);
+}
+
+// Шаг 2 — Проверка состава
+function buildCO2(page){
+  page.appendChild(coHdr('Проверка заказа',()=>{S.checkout.step=1;render();}));
+  const scr=el('div',{cls:'scroll',css:'padding:16px 14px 120px;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:16px;'},[txt('Всё верно?')]));
+  Object.entries(S.cart).forEach(([id,qty])=>{
+    const p=[...FLOWERS,...GIFTS].find(f=>f.id==id);if(!p)return;
+    const row=el('div',{css:'display:flex;align-items:center;gap:10px;padding:12px;background:var(--glass);border:1px solid var(--border);border-radius:14px;margin-bottom:8px;'});
+    row.appendChild(el('div',{css:'font-size:26px;'},[p.e]));
+    const inf=el('div',{css:'flex:1;'});
+    inf.appendChild(el('div',{css:'font-size:13px;font-weight:600;'},[p.type==='Роза'||p.type==='Пионы'||p.type==='Хризантема'?flName(p):p.name]));
+    inf.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);'},[txt(qty+' шт.')]));
+    row.appendChild(inf);
+    row.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:var(--accent);'},[txt((p.price*qty).toLocaleString('ru')+' ₽')]));
+    scr.appendChild(row);
+  });
+  const tot=el('div',{css:'display:flex;justify-content:space-between;padding:14px 0;margin-top:6px;border-top:0.5px solid var(--border);'});
+  tot.appendChild(el('span',{css:'font-size:17px;font-weight:700;'},[txt('Итого')]));
+  tot.appendChild(el('span',{css:'font-size:18px;font-weight:800;color:var(--accent);'},[txt(S.checkout.total.toLocaleString('ru')+' ₽')]));
+  scr.appendChild(tot);
+  page.appendChild(scr);
+  const foot=el('div',{css:'display:flex;flex-direction:column;gap:8px;padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid var(--border);background:var(--bg);'});
+  const ok=el('button',{cls:'btn-prim',onClick:()=>{S.checkout.step=3;render();}});ok.textContent='Да, всё верно! ✓';
+  const back=el('button',{css:'padding:12px;border-radius:14px;border:1px solid var(--pink);background:rgba(255,55,95,.08);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',
+    onClick:()=>{S.checkout=null;render();}});back.textContent='Нет, хочу изменить';
+  foot.appendChild(ok);foot.appendChild(back);page.appendChild(foot);
+}
+
+// Шаг 3 — Кто встретит
+function buildCO3(page){
+  const co=S.checkout;
+  page.appendChild(coHdr('Получатель',()=>{co.step=2;render();}));
+  const scr=el('div',{cls:'scroll',css:'padding:16px 14px 120px;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:20px;'},[txt('Кто встретит курьера?')]));
+
+  [['me','Я 👤'],['other','Другой человек 👥']].forEach(([v,lb])=>{
+    const card=el('div',{
+      css:'padding:16px;border-radius:18px;border:1.5px solid '+(co.receiver===v?'var(--accent)':'var(--border)')+';background:'+(co.receiver===v?'rgba(191,90,242,.1)':'var(--glass)')+';margin-bottom:10px;cursor:pointer;',
+      onClick:()=>{co.receiver=v;render();}});
+    card.appendChild(el('div',{css:'font-size:16px;font-weight:700;color:'+(co.receiver===v?'var(--accent)':'var(--txt)')+';'},[lb]));
+    scr.appendChild(card);
+  });
+
+  if(co.receiver==='other'){
+    const oSec=el('div',{css:'margin-top:12px;'});
+    oSec.appendChild(el('div',{cls:'inp-label',css:'display:block;'},[txt('Имя')]));
+    const nameI=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Имя получателя'});nameI.value=co.otherName;
+    nameI.addEventListener('input',()=>{co.otherName=nameI.value;});
+    oSec.appendChild(nameI);
+    oSec.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:4px;'},[txt('Телефон')]));
+    const phoneI=el('input',{cls:'inp',placeholder:'+7 ...',type:'tel'});phoneI.value=co.otherPhone;
+    phoneI.addEventListener('input',()=>{co.otherPhone=phoneI.value;});
+    oSec.appendChild(phoneI);
+    scr.appendChild(oSec);
+  }
+  page.appendChild(scr);
+
+  const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid var(--border);background:var(--bg);'});
+  const b=el('button',{cls:'btn-prim',onClick:()=>{if(co.receiver){co.step=4;render();}else showNotif('Выберите получателя','⚠️');}});
+  b.style.opacity=co.receiver?'1':'0.4';
+  b.textContent='Продолжить →';foot.appendChild(b);page.appendChild(foot);
+}
+
+// Шаг 4 — "Готовим реквизиты" + анимация
+function buildCO4(page){
+  const co=S.checkout;
+  // Создаём заказ здесь
+  if(!co.orderId){
+    const order=placeOrder();
+    co.orderId=order.id;
+  }
+  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:28px;'},[txt('Готовим реквизиты')]));
+
+  // Спиннер
+  const spin=el('div',{css:'width:60px;height:60px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;margin:0 auto 28px;animation:spin360 .9s linear infinite;'});
+  scr.appendChild(spin);
+
+  // Меняющееся сообщение
+  const msgDiv=el('div',{css:'font-size:13px;color:var(--txt3);min-height:20px;transition:opacity .5s;'});
+  msgDiv.textContent=CHECKOUT_MSGS[co.msgIdx||0];
+  scr.appendChild(msgDiv);
+
+  if(!co._msgTimer){
+    co._msgTimer=setInterval(()=>{
+      co.msgIdx=((co.msgIdx||0)+1)%CHECKOUT_MSGS.length;
+      const md=document.querySelector('#co4msg');
+      if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CHECKOUT_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
+    },2000);
+    // Симуляция: реквизиты появляются через 6 секунд
+    co._payTimer=setTimeout(()=>{
+      clearInterval(co._msgTimer);co._msgTimer=null;
+      // Устанавливаем демо-реквизиты
+      co.payBank=BANKS[0];
+      co.payPhone='+7 (999) 999-99-99';
+      co.payName='Иван Петров';
+      co.step=5;render();
+    },6000);
+  }
+  msgDiv.id='co4msg';
+  page.appendChild(scr);
+}
+
+// Шаг 5 — Оплата
+function buildCO5(page){
+  const co=S.checkout;
+  const scr=el('div',{cls:'scroll',css:'padding:20px 16px 120px;text-align:center;'});
+
+  // Таймер 5 минут
+  if(!co._deadline)co._deadline=Date.now()+5*60*1000;
+  const getLeft=()=>Math.max(0,Math.ceil((co._deadline-Date.now())/1000));
+  const timDiv=el('div',{css:'font-size:24px;font-weight:800;margin-bottom:20px;color:var(--gold);'});
+  function updateTimer(){
+    const s=getLeft();const m=Math.floor(s/60);const sec=s%60;
+    timDiv.textContent='⏱ '+m+':'+(sec<10?'0':'')+sec;
+    if(s>0)requestAnimationFrame(updateTimer);
+  }
+  updateTimer();
+  scr.appendChild(timDiv);
+  scr.appendChild(el('div',{css:'font-size:18px;font-weight:700;margin-bottom:18px;'},[txt('Оплата заказа')]));
+
+  const bank=co.payBank||BANKS[0];
+  const bankCard=el('div',{css:'background:var(--glass);border:1px solid var(--border2);border-radius:22px;padding:24px;margin-bottom:16px;'});
+  bankCard.appendChild(el('div',{css:'font-size:44px;margin-bottom:8px;'},[bank.logo]));
+  bankCard.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:10px;'},[bank.name]));
+  // Имя получателя
+  bankCard.appendChild(el('div',{css:'display:inline-block;background:rgba(255,255,255,.08);border-radius:100px;padding:6px 18px;font-size:14px;font-weight:700;margin-bottom:14px;'},[co.payName||'—']));
+  bankCard.appendChild(el('div',{css:'font-size:28px;font-weight:900;color:var(--accent);margin-bottom:12px;'},[txt(co.total.toLocaleString('ru')+' ₽')]));
+  // Телефон — копировать
+  const phoneRow=el('div',{css:'background:rgba(10,132,255,.1);border:1px solid rgba(10,132,255,.3);border-radius:14px;padding:14px;cursor:pointer;',
+    onClick:()=>{navigator.clipboard?.writeText(co.payPhone||'');showNotif('Скопировано!','📋');}});
+  phoneRow.appendChild(el('div',{css:'font-size:20px;font-weight:800;color:var(--blue);'},[co.payPhone||'—']));
+  phoneRow.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin-top:4px;'},[txt('Нажми, чтобы скопировать')]));
+  bankCard.appendChild(phoneRow);
+  scr.appendChild(bankCard);
+  page.appendChild(scr);
+
+  // Кнопка активна через 15 сек
+  if(!co._paidEnabled){
+    co._paidEnabled=false;
+    setTimeout(()=>{
+      co._paidEnabled=true;
+      const btn=document.getElementById('paidBtn');
+      if(btn){btn.style.opacity='1';btn.disabled=false;}
+    },15000);
+  }
+  const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid var(--border);background:var(--bg);'});
+  const payBtn=el('button',{id:'paidBtn',cls:'btn-prim',onClick:()=>{co.step=6;render();}});
+  payBtn.textContent='Я оплатил ✓';
+  payBtn.style.opacity=co._paidEnabled?'1':'0.4';
+  payBtn.disabled=!co._paidEnabled;
+  foot.appendChild(payBtn);page.appendChild(foot);
+}
+
+// Шаг 6 — Проверяем платёж
+function buildCO6(page){
+  const co=S.checkout;
+  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:28px;'},[txt('Проверяем платёж...')]));
+  const spin=el('div',{css:'width:60px;height:60px;border:3px solid var(--border2);border-top-color:var(--green);border-radius:50%;margin:0 auto 28px;animation:spin360 .9s linear infinite;'});
+  scr.appendChild(spin);
+  const msgDiv=el('div',{id:'co6msg',css:'font-size:13px;color:var(--txt3);min-height:20px;'});
+  msgDiv.textContent=PAY_MSGS[0];scr.appendChild(msgDiv);
+
+  if(!co._payMsgTimer){
+    let pi=0;
+    co._payMsgTimer=setInterval(()=>{
+      pi++;
+      const last=pi>=PAY_MSGS.length-1;
+      if(last)pi=PAY_MSGS.length-2+(pi%2);
+      const md=document.getElementById('co6msg');
+      if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=PAY_MSGS[Math.min(pi,PAY_MSGS.length-1)];md.style.opacity='1';}},500);}
+    },3000);
+    // Симуляция: через 12 секунд — результат
+    co._verifyTimer=setTimeout(()=>{
+      clearInterval(co._payMsgTimer);co._payMsgTimer=null;
+      co.payStatus=Math.random()>0.15?'ok':'fail'; // 85% успех для демо
+      co.step=7;render();
+    },12000);
+  }
+  page.appendChild(scr);
+}
+
+// Шаг 7 — Результат
+function buildCO7(page){
+  const co=S.checkout;
+  const ok=co.payStatus==='ok';
+  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
+
+  if(ok){
+    scr.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;animation:float 3s ease-in-out infinite;'},[txt('🎉')]));
+    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},[txt('Заказ #'+co.orderId+'\nоформлен!')]));
+    scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px;'},[txt('Отслеживайте его в Профиль → Мои заказы\n\nЕсли нужна помощь, поддержка работает 24/7')]));
+    const sb=el('button',{cls:'btn-glass',css:'margin-bottom:10px;',onClick:()=>{S.profSec='support';S.checkout=null;S.tab=2;render();}});sb.textContent='Связаться с нами';
+    const ob=el('button',{cls:'btn-prim',onClick:()=>{S.checkout=null;render();}});ob.textContent='Ура! 🌸';
+    scr.appendChild(sb);scr.appendChild(ob);
+  }else{
+    scr.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;'},[txt('😔')]));
+    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},[txt('Что-то пошло не так')]));
+    scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);margin-bottom:24px;'},[txt('Пожалуйста, свяжитесь с поддержкой')]));
+    const sb=el('button',{cls:'btn-glass',css:'margin-bottom:10px;',onClick:()=>{S.profSec='support';S.checkout=null;S.tab=2;render();}});sb.textContent='Связаться с нами';
+    const rb=el('button',{css:'width:100%;padding:15px;border-radius:14px;border:1px solid var(--pink);background:rgba(255,55,95,.1);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',
+      onClick:()=>{S.checkout=null;render();}});rb.textContent='Выйти';
+    scr.appendChild(sb);scr.appendChild(rb);
+  }
+  page.appendChild(scr);
+}
 }
 
 // ═══════════════════════════════════════════════
@@ -961,11 +1280,64 @@ function buildProfSec(){
 
   if(k==='data'){
     scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:18px;'},[txt('👤 Мои данные')]));
-    [['Имя',S.user.name],['Телефон',S.user.phone||''],['Адрес',S.user.addr||'']].forEach(([lb,val])=>{
-      scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:14px;'},[lb]));
-      scr.appendChild(el('input',{cls:'inp',value:val,placeholder:lb}));
-    });
-    const sv=el('button',{cls:'btn-prim',css:'margin-top:22px;',onClick:()=>showNotif('Данные сохранены')});
+
+    // Основные поля
+    const nameI=el('input',{cls:'inp',placeholder:'Имя'});nameI.value=S.user.name||'';
+    const phoneI=el('input',{cls:'inp',placeholder:'Телефон'});phoneI.value=S.user.phone||'';
+    scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:0;'},[txt('Имя')]));
+    scr.appendChild(nameI);
+    scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:12px;'},[txt('Телефон')]));
+    scr.appendChild(phoneI);
+
+    // Адреса
+    scr.appendChild(el('div',{css:'font-size:17px;font-weight:700;margin-top:22px;margin-bottom:10px;'},[txt('📍 Адреса доставки')]));
+    if(!S.user.addresses)S.user.addresses=[{street:S.user.addr||'',intercom:S.user.intercom||'',entr:S.user.entr||'',floor:S.user.floor||'',apt:S.user.apt||'',note:'',expanded:false}];
+
+    function renderAddresses(){
+      const addrWrap=document.getElementById('addrWrap');if(!addrWrap)return;
+      addrWrap.innerHTML='';
+      S.user.addresses.forEach((addr,ai)=>{
+        const label=addr.street||'Адрес '+(ai+1);
+        const card=el('div',{css:'background:var(--glass);border:1px solid var(--border);border-radius:18px;margin-bottom:8px;overflow:hidden;'});
+        const head=el('div',{css:'display:flex;align-items:center;padding:14px 16px;cursor:pointer;',onClick:()=>{addr.expanded=!addr.expanded;renderAddresses();}});
+        head.appendChild(el('div',{css:'flex:1;font-size:14px;font-weight:600;'},[label]));
+        head.appendChild(el('div',{css:'color:var(--txt3);font-size:18px;transition:transform .3s;transform:rotate('+(addr.expanded?'90':'0')+'deg);'},[txt('›')]));
+        card.appendChild(head);
+
+        if(addr.expanded){
+          const body=el('div',{css:'padding:0 14px 14px;display:flex;flex-direction:column;gap:8px;'});
+          [['street','Улица, дом'],['intercom','Домофон'],['entr','Подъезд'],['floor','Этаж'],['apt','Квартира'],['note','Комментарий для курьера']].forEach(([fk,fp])=>{
+            body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:4px;'},[fp]));
+            const fi=el('input',{cls:'inp',placeholder:fp});fi.value=addr[fk]||'';
+            fi.addEventListener('input',()=>{addr[fk]=fi.value;if(fk==='street')renderAddresses();});
+            body.appendChild(fi);
+          });
+          const delB=el('button',{css:'margin-top:8px;background:rgba(255,55,95,.1);border:1px solid rgba(255,55,95,.3);border-radius:12px;padding:10px;color:#ff375f;font-size:13px;font-weight:600;cursor:pointer;width:100%;',
+            onClick:()=>{S.user.addresses.splice(ai,1);renderAddresses();}});
+          delB.textContent='🗑 Удалить адрес';body.appendChild(delB);
+          card.appendChild(body);
+        }
+        addrWrap.appendChild(card);
+      });
+    }
+
+    const addrWrap=el('div',{id:'addrWrap'});
+    scr.appendChild(addrWrap);
+    // Первый рендер адресов
+    setTimeout(renderAddresses,0);
+
+    const addAddrB=el('button',{
+      css:'width:100%;padding:14px;background:rgba(191,90,242,.1);border:1.5px dashed rgba(191,90,242,.4);border-radius:16px;color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;',
+      onClick:()=>{S.user.addresses.push({street:'',intercom:'',entr:'',floor:'',apt:'',note:'',expanded:true});renderAddresses();}});
+    addAddrB.textContent='+ Добавить адрес';
+    scr.appendChild(addAddrB);
+
+    const sv=el('button',{cls:'btn-prim',css:'margin-top:22px;',onClick:()=>{
+      S.user.name=nameI.value||S.user.name;
+      S.user.phone=phoneI.value||S.user.phone;
+      if(S.user.addresses[0])S.user.addr=S.user.addresses[0].street;
+      save();showNotif('Данные сохранены ✅');
+    }});
     sv.textContent='Сохранить';scr.appendChild(sv);
   }
 
@@ -1112,30 +1484,53 @@ function obPhone(){
   d.appendChild(el('div',{cls:'ob-title'},[txt('Введите номер\nтелефона')]));
   d.appendChild(el('div',{cls:'ob-sub'},[txt('Вводи актуальный номер — он нужен\nнам для связи, если с твоим заказом\nчто-то пойдёт не так')]));
 
-  const row=el('div',{cls:'otp-row'});
-  const prefix=el('div',{css:'font-size:18px;font-weight:700;padding:12px 4px;color:var(--txt2);align-self:center;'},[txt('+7')]);
-  row.appendChild(prefix);
-
+  // Формат: +7 (***) ***-**-**  = 10 цифр
+  // Группы: [3, 3, 2, 2]
+  const GROUPS=[3,3,2,2];
+  const SEPS=['(',')','-','-']; // разделители до каждой группы кроме первой
   const boxes=[];
+
   const cont=el('button',{cls:'btn-glass',css:'margin-top:28px;display:none;',onClick:()=>{
     S.obPhone='+7'+boxes.map(b=>b.value).join('');
     S.obStep=2;render();
   }});
   cont.textContent='Продолжить →';
 
-  for(let i=0;i<10;i++){
-    const box=el('input',{cls:'otp-box',type:'tel',maxlength:'1',inputmode:'numeric',placeholder:'•'});
-    boxes.push(box);row.appendChild(box);
-    box.addEventListener('input',()=>{
-      if(box.value&&!/\d/.test(box.value)){box.value='';return;}
-      if(box.value)box.classList.add('ok');else box.classList.remove('ok');
-      if(box.value&&i<9)boxes[i+1].focus();
-      cont.style.display=boxes.filter(b=>b.value).length===10?'block':'none';
-    });
-    box.addEventListener('keydown',(e)=>{if(e.key==='Backspace'&&!box.value&&i>0)boxes[i-1].focus();});
-  }
+  // Строим строку +7 (xxx) xxx-xx-xx
+  const phoneRow=el('div',{css:'display:flex;align-items:center;gap:4px;justify-content:center;flex-wrap:nowrap;'});
+  const prefix7=el('div',{css:'font-size:20px;font-weight:800;color:var(--txt2);flex-shrink:0;margin-right:2px;'},[txt('+7')]);
+  phoneRow.appendChild(prefix7);
 
-  d.appendChild(row);d.appendChild(cont);
+  // Открывающая скобка
+  phoneRow.appendChild(el('div',{css:'font-size:20px;font-weight:700;color:var(--txt3);flex-shrink:0;'},[txt('(')]));
+
+  GROUPS.forEach((len, gi)=>{
+    // Квадраты для группы
+    for(let j=0;j<len;j++){
+      const idx=boxes.length;
+      const box=el('input',{cls:'otp-box',type:'tel',maxlength:'1',inputmode:'numeric',placeholder:'•'});
+      box.style.width='34px';
+      boxes.push(box);
+      phoneRow.appendChild(box);
+
+      box.addEventListener('input',()=>{
+        if(box.value&&!/\d/.test(box.value)){box.value='';return;}
+        if(box.value)box.classList.add('ok');else box.classList.remove('ok');
+        if(box.value&&idx<9)boxes[idx+1].focus();
+        cont.style.display=boxes.filter(b=>b.value).length===10?'block':'none';
+      });
+      box.addEventListener('keydown',(e)=>{
+        if(e.key==='Backspace'&&!box.value&&idx>0)boxes[idx-1].focus();
+      });
+    }
+
+    // Разделитель после группы
+    if(gi===0) phoneRow.appendChild(el('div',{css:'font-size:20px;font-weight:700;color:var(--txt3);flex-shrink:0;'},[txt(')')]));
+    else if(gi===1||gi===2) phoneRow.appendChild(el('div',{css:'font-size:20px;font-weight:700;color:var(--txt3);flex-shrink:0;'},[txt('-')]));
+  });
+
+  d.appendChild(phoneRow);
+  d.appendChild(cont);
   return d;
 }
 
@@ -1333,12 +1728,21 @@ function buildAdminLogin(){
   d.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:24px;text-align:center;'},[txt('Администратор')]));
   const loginI=el('input',{cls:'inp',placeholder:'Логин',css:'margin-bottom:10px;'});
   const passI=el('input',{cls:'inp',type:'password',placeholder:'Пароль',css:'margin-bottom:20px;'});
-  const err=el('div',{css:'color:var(--pink);font-size:13px;margin-bottom:10px;display:none;'},[txt('Неверные данные')]);
+  // ВАЖНО: поля НЕ блокируются после неверного ввода
+  const err=el('div',{css:'color:var(--pink);font-size:13px;margin-bottom:10px;min-height:18px;'},[txt('')]);
   const btn=el('button',{cls:'btn-prim',onClick:()=>{
-    if(loginI.value==='AdminAdmin'&&passI.value==='AdminAdmin'){S.adminMode=true;S.adminLogin=false;render();}
-    else{err.style.display='block';setTimeout(()=>err.style.display='none',2000);}
+    const l=loginI.value.trim();const p=passI.value;
+    if(l==='AdminAdmin'&&p==='AdminAdmin'){
+      err.textContent='';S.adminMode=true;S.adminLogin=false;S.adminLoginFailed=false;render();
+    }else{
+      err.textContent='Неверные данные, попробуйте ещё раз';
+      passI.value=''; // очищаем только пароль
+      passI.focus();
+    }
   }});
   btn.textContent='Войти';
+  // Enter для логина
+  [loginI,passI].forEach(inp=>inp.addEventListener('keydown',(e)=>{if(e.key==='Enter')btn.click();}));
   const back=el('button',{css:'margin-top:16px;background:none;border:none;color:var(--txt2);font-size:14px;cursor:pointer;',
     onClick:()=>{S.adminLogin=false;render();}});
   back.textContent='← Назад';

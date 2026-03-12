@@ -1,29 +1,35 @@
-// api/status.js
-// Открой в браузере: https://ВАШ_САЙТ.vercel.app/api/status
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const WEBAPP_URL = process.env.WEBAPP_URL;
 
-export default async function handler(req, res) {
-  const BOT_TOKEN = process.env.BOT_TOKEN;
-  const WEBAPP_URL = process.env.WEBAPP_URL;
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
   if (!BOT_TOKEN) {
-    return res.status(500).json({
+    return res.status(200).json({
       ok: false,
       error: 'BOT_TOKEN не задан',
-      fix: 'Добавьте BOT_TOKEN в Vercel → Settings → Environment Variables'
+      fix: 'Vercel → Settings → Environment Variables → добавить BOT_TOKEN'
     });
   }
 
-  const getMe = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-  const botInfo = await getMe.json();
+  try {
+    const [meRes, whRes] = await Promise.all([
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`),
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`)
+    ]);
 
-  const getWebhook = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
-  const webhookInfo = await getWebhook.json();
+    const me = await meRes.json();
+    const wh = await whRes.json();
 
-  return res.status(200).json({
-    ok: true,
-    bot: botInfo.result,
-    webhook: webhookInfo.result,
-    webapp_url: WEBAPP_URL,
-    status: webhookInfo.result?.url ? '✅ Бот работает' : '⚠️ Вебхук не зарегистрирован. Откройте /api/setup',
-  });
-}
+    return res.status(200).json({
+      ok: true,
+      status: wh.result?.url ? '✅ Бот работает' : '⚠️ Вебхук не зарегистрирован — откройте /api/setup',
+      bot: me.result ? `@${me.result.username}` : 'не найден',
+      webhook_url: wh.result?.url || 'не задан',
+      webapp_url: WEBAPP_URL || 'не задан',
+      pending_updates: wh.result?.pending_update_count || 0
+    });
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: e.message });
+  }
+};

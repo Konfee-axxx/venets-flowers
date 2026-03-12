@@ -1,9 +1,3 @@
 {
-  "version": 2,
-  "outputDirectory": ".",
-  "rewrites": [
-    { "source": "/api/webhook", "destination": "/api/webhook" },
-    { "source": "/api/setup",   "destination": "/api/setup"   },
-    { "source": "/api/status",  "destination": "/api/status"  }
-  ]
+  "version": 2
 }

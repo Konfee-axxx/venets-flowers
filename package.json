@@ -1,8 +1,4 @@
 {
   "name": "venets-flowers",
-  "version": "1.0.0",
-  "description": "Venets Flowers — магазин цветов и подарков",
-  "engines": {
-    "node": ">=18"
-  }
+  "version": "1.0.0"
 }

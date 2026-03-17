@@ -391,19 +391,45 @@ function save(){
   try{localStorage.setItem('vn4',JSON.stringify({u:S.user,c:S.cart,o:S.orders,ch:S.chats,flowers:FLOWERS,gifts:GIFTS,unread:S.unreadChats}));}catch(e){}
 }
 
-// ══ POLLING ══
-const POLL_URL='/api/poll';
-async function pollOrder(orderId){
+// ══ SERVER STATE — централизованное хранилище через /api/order-state ══
+const STATE_URL = '/api/order-state';
+
+// Установить состояние заказа на сервере
+async function setOrderState(id, data){
   try{
-    const r=await fetch(POLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'check',orderId:String(orderId)})});
+    await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set_order',orderId:String(id),data})});
+  }catch(e){}
+}
+
+// Получить состояние заказа с сервера
+async function getOrderState(id){
+  try{
+    const r=await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'get_order',orderId:String(id)})});
     const d=await r.json();
-    return d;
+    return d.state||null;
   }catch(e){return null;}
 }
-async function apiCall(body){
-  try{await fetch(POLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}catch(e){}
+
+// Получить все pending заказы для админ-панели
+async function getPendingOrders(){
+  try{
+    const r=await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'get_pending'})});
+    const d=await r.json();
+    return d.orders||[];
+  }catch(e){return [];}
 }
-// Telegram WebApp user ID
+
+// Уведомление в TG бот (fire-and-forget)
+async function notifyAdmin(body){
+  try{
+    await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+  }catch(e){}
+}
+
 function getTgId(){
   try{return window.Telegram?.WebApp?.initDataUnsafe?.user?.id||null;}catch(e){return null;}
 }
@@ -959,15 +985,22 @@ function buildCO4(page){
       address:addr.street||S.user.addr||'—',
       receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
       disc:co.disc,
-      userName:S.user.name||'—',userPhone:S.user.phone||'—'
+      userName:S.user.name||'—',userPhone:S.user.phone||'—',
+      payState:'waiting_requisites' // ожидает реквизиты от админа
     };
     S.orders.unshift(order);
     if(co.disc>0&&S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
     co.orderId=order.id;
     addLog('Создан заказ №'+order.id,'Сумма: '+order.total+' ₽');
     save();
-    // Правка 4: уведомление TG администратору
-    apiCall({action:'new_order',orderData:order});
+    // Сохраняем в shared localStorage чтобы админ видел
+    setOrderState(order.id, order);  // async fire-and-forget
+    // Уведомление в TG бот (fire-and-forget)
+    notifyAdmin({action:'new_order',orderData:{
+      id:order.id,total:order.total,
+      userName:order.userName,userPhone:order.userPhone,
+      items:order.items,address:order.address
+    }});
   }
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
   scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:30px;'},['Готовим реквизиты']));
@@ -981,22 +1014,22 @@ function buildCO4(page){
       const md=document.getElementById('co4msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CO_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
     },2000);
-    // Правка 4: polling каждые 3 сек вместо таймера
+    // Server polling — проверяем /api/order-state каждые 2.5 сек
     co._pollTimer=setInterval(async()=>{
-      const result=await pollOrder(String(co.orderId));
-      if(!result)return;
-      if(result.cancelled){
+      const ord=await getOrderState(co.orderId);
+      if(!ord)return;
+      if(ord.payState==='cancelled'){
         clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
         co.payStatus='fail';co.step=7;render();return;
       }
-      if(result.payReady){
+      if(ord.payState==='requisites_sent'){
         clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
-        co.payBank=BANKS.find(b=>b.name===result.payBank)||BANKS[0];
-        co.payPhone=result.payPhone||'+7 (999) 999-99-99';
-        co.payName=result.payName||'Получатель';
+        co.payBank=BANKS.find(b=>b.id===ord.payBankId)||BANKS.find(b=>b.name===ord.payBank)||BANKS[0];
+        co.payPhone=ord.payPhone||'—';
+        co.payName=ord.payName||'—';
         co.step=5;render();
       }
-    },3000);
+    },2500);
   }
 }
 function buildCO5(page){
@@ -1029,7 +1062,16 @@ function buildCO5(page){
     co._paidTimer=setTimeout(()=>{co._paidEnabled=true;const b=document.getElementById('paidBtn');if(b){b.disabled=false;b.style.opacity='1';}},15000);
   }
   const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const payBtn=el('button',{id:'paidBtn',cls:'btn-prim',onClick:()=>{co.step=6;render();}});
+  const payBtn=el('button',{id:'paidBtn',cls:'btn-prim',onClick:()=>{
+    // Записываем в shared state что пользователь оплатил
+    setOrderState(co.orderId,{payState:'paid',status:'Ожидаем подтверждения'});
+    const ord=S.orders.find(o=>o.id===co.orderId);
+    if(ord){ord.status='Ожидаем подтверждения';ord.payState='paid';save();}
+    addLog('Оплата заказа №'+co.orderId,'Ожидаем подтверждения');
+    // Уведомление админу
+    notifyAdmin({action:'paid',orderId:String(co.orderId)});
+    co.step=6;render();
+  }});
   payBtn.textContent='Я оплатил ✓';payBtn.disabled=!co._paidEnabled;payBtn.style.opacity=co._paidEnabled?'1':'0.4';
   foot.appendChild(payBtn);page.appendChild(foot);
 }
@@ -1048,51 +1090,53 @@ function buildCO6(page){
       const md=document.getElementById('co6msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=PAY_MSGS[Math.min(idx,PAY_MSGS.length-1)];md.style.opacity='1';}},500);}
     },3000);
-    // Polling — ждём подтверждения или отмены от администратора
+    // Server polling — ждём подтверждения или отмены от администратора
     co._confirmPoll=setInterval(async()=>{
-      const result=await pollOrder(String(co.orderId));
-      if(!result)return;
-      if(result.confirmed){
+      const ord=await getOrderState(co.orderId);
+      if(!ord)return;
+      if(ord.payState==='confirmed'){
         clearInterval(co._confirmPoll);clearInterval(co._payMsgTimer);
         co._confirmPoll=null;co._payMsgTimer=null;
         co.payStatus='ok';co.step=7;render();
-      }else if(result.cancelled){
+      }else if(ord.payState==='cancelled'){
         clearInterval(co._confirmPoll);clearInterval(co._payMsgTimer);
         co._confirmPoll=null;co._payMsgTimer=null;
         co.payStatus='fail';co.step=7;render();
       }
-    },3000);
-    // Fallback через 30 сек если нет ответа — успех для демо
-    co._verifyTimer=setTimeout(()=>{
-      if(co._confirmPoll){clearInterval(co._confirmPoll);co._confirmPoll=null;}
-      if(co._payMsgTimer){clearInterval(co._payMsgTimer);co._payMsgTimer=null;}
-      if(co.step===6){co.payStatus='ok';co.step=7;render();}
-    },30000);
+    },2500);
   }
 }
 function buildCO7(page){
   const co=S.checkout;const ok=co.payStatus==='ok';
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
   if(ok){
-    // Начисляем баллы только при успехе
-    if(S.user&&!co._pointsGiven){
-      co._pointsGiven=true;
-      // Баллы начисляются только при ЗАКРЫТ (не здесь)
-    }
     scr.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;animation:float 3s ease-in-out infinite;'},['🎉']));
     scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;white-space:pre-line;'},['Заказ №'+co.orderId+'\nоформлен!']));
     scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px;'},['Отслеживайте в Профиль → Мои заказы\n\nПоддержка работает 24/7']));
-    const sb=el('button',{cls:'btn-glass',css:'margin-bottom:10px;',onClick:()=>{S.profSec='support';S.checkout=null;S.tab=2;render();}});sb.textContent='Связаться с нами';
-    const ob=el('button',{cls:'btn-prim',onClick:()=>{S.cart={};S.usePetals=false;S.checkout=null;save();render();}});ob.textContent='Ура! 🌸';
+    const sb=el('button',{cls:'btn-glass',css:'margin-bottom:10px;width:100%;',
+      onClick:()=>{S.chatOpen=true;S.checkout=null;S.tab=2;render();}});
+    sb.textContent='Связаться с поддержкой';
+    const ob=el('button',{cls:'btn-prim',
+      onClick:()=>{S.cart={};S.usePetals=false;S.checkout=null;save();render();}});
+    ob.textContent='Ура! 🌸';
     scr.appendChild(sb);scr.appendChild(ob);
   }else{
+    // Обновляем статус заказа
+    const ord=S.orders.find(o=>o.id===co.orderId);
+    if(ord&&!ord._cancelDone){ord._cancelDone=true;ord.status='Отменён';ord.payState='cancelled';save();}
     scr.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;'},['😔']));
-    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['Что-то пошло не так']));
-    scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);margin-bottom:24px;'},['Пожалуйста, свяжитесь с поддержкой']));
-    // Статус Отменён
-    const ord=S.orders.find(o=>o.id===co.orderId);if(ord)ord.status='Отменён';save();
-    const sb=el('button',{cls:'btn-glass',css:'margin-bottom:10px;',onClick:()=>{S.profSec='support';S.checkout=null;S.tab=2;render();}});sb.textContent='Связаться с нами';
-    const rb=el('button',{css:'width:100%;padding:15px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',onClick:()=>{S.checkout=null;render();}});rb.textContent='Выйти';
+    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['Что‑то пошло не так']));
+    scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px;'},['Не переживайте! Свяжитесь с поддержкой\nи мы всё решим.']));
+    // Выделенная кнопка поддержки
+    const sb=el('button',{
+      css:'width:100%;padding:17px;border-radius:20px;border:1.5px solid rgba(191,90,242,.5);background:rgba(191,90,242,.12);color:var(--accent);font-size:17px;font-weight:700;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 20px rgba(191,90,242,.2);',
+      onClick:()=>{S.chatOpen=true;S.checkout=null;S.tab=2;render();}});
+    sb.textContent='🆘 Связаться с поддержкой';
+    // Кнопка назад
+    const rb=el('button',{
+      css:'width:100%;padding:15px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:var(--txt2);font-size:15px;font-weight:600;cursor:pointer;',
+      onClick:()=>{S.checkout=null;render();}});
+    rb.textContent='← На главную';
     scr.appendChild(sb);scr.appendChild(rb);
   }
   page.appendChild(scr);
@@ -1707,10 +1751,20 @@ function buildAdmin(){
   page.appendChild(hdr);
   const tabs=['📊','📦','👤','🌸','📋','💬'];
   const tabBar=el('div',{css:'display:flex;background:rgba(255,255,255,.04);margin:10px 14px 0;border-radius:16px;padding:3px;gap:2px;'});
+  // Считаем pending заказы для badge
+  const pendingCount=S.orders.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid').length;
+  // Считаем непрочитанные чаты
+  const pendingChats=S.chats.filter(c=>c.status==='Активный'&&c.msgs.some(m=>m.from==='user'&&m.adminUnread)).length;
   tabs.forEach((ic,i)=>{
-    const t=el('div',{css:'flex:1;padding:8px 2px;text-align:center;border-radius:13px;font-size:18px;cursor:pointer;transition:all .2s;'+(S.adminTab===i?'background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);':''),
+    const hasBadge=(i===1&&pendingCount>0)||(i===5&&pendingChats>0);
+    const t=el('div',{css:'flex:1;padding:8px 2px;text-align:center;border-radius:13px;font-size:18px;cursor:pointer;transition:all .2s;position:relative;'+(S.adminTab===i?'background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);':'')+(hasBadge?'border:1.5px solid rgba(255,55,95,.7);animation:pulse 2s ease-in-out infinite;':''),
       onClick:()=>{S.adminTab=i;S.adminDetail=null;render();}});
-    t.textContent=ic;tabBar.appendChild(t);
+    t.textContent=ic;
+    if(hasBadge){
+      const bd=el('div',{css:'position:absolute;top:2px;right:2px;background:#ff375f;color:#fff;border-radius:50%;width:14px;height:14px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;'},[(i===1?pendingCount:pendingChats).toString()]);
+      t.appendChild(bd);
+    }
+    tabBar.appendChild(t);
   });
   page.appendChild(tabBar);
   const scr=el('div',{cls:'scroll',css:'padding:14px 14px 60px;'});
@@ -1742,50 +1796,241 @@ function buildAdminDash(scr){
 }
 
 function buildAdminOrders(scr){
-  scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:14px;'},['📦 Заказы']));
-  const tabs=['Текущие','Архив'];
+  // ── ДЕТАЛЬНАЯ СТРАНИЦА ЗАКАЗА ──────────────────────────────────────────
+  if(S.adminDetail&&S.adminDetail._orderId){
+    const ordId=S.adminDetail._orderId;
+    const o=S.orders.find(x=>x.id===ordId);
+    if(!o){S.adminDetail=null;render();return;}
+
+    const back=el('button',{cls:'back-btn',css:'margin-bottom:16px;display:flex;align-items:center;gap:4px;',
+      onClick:()=>{S.adminDetail=null;render();}},[txt('‹ К заказам')]);
+    scr.appendChild(back);
+    scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:4px;'},['Заказ №'+o.id]));
+    scr.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:14px;'},[o.date+' · '+o.address]));
+
+    // Состав
+    const box=el('div',{css:'background:rgba(255,255,255,.04);border-radius:14px;padding:12px;margin-bottom:12px;'});
+    box.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);font-weight:700;margin-bottom:8px;letter-spacing:.5px;'},['СОСТАВ']));
+    Object.entries(o.items||{}).forEach(([id,qty])=>{
+      const p=[...FLOWERS,...GIFTS].find(f=>f.id==id);if(!p)return;
+      const r=el('div',{css:'display:flex;justify-content:space-between;padding:4px 0;'});
+      r.appendChild(el('span',{css:'font-size:13px;'},[p.e+' '+(p.name||flName(p))+' × '+qty]));
+      r.appendChild(el('span',{css:'font-size:13px;color:var(--accent);'},[(p.price*qty).toLocaleString('ru')+' ₽']));
+      box.appendChild(r);
+    });
+    const tot=el('div',{css:'display:flex;justify-content:space-between;border-top:0.5px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;'});
+    tot.appendChild(el('span',{css:'font-size:14px;font-weight:700;'},['Итого']));
+    tot.appendChild(el('span',{css:'font-size:14px;font-weight:800;color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽']));
+    box.appendChild(tot);scr.appendChild(box);
+
+    // Клиент
+    const cli=el('div',{css:'background:rgba(255,255,255,.04);border-radius:14px;padding:12px;margin-bottom:16px;'});
+    [['👤',o.userName||'—'],['📞',o.userPhone||'—'],['📍',o.address||'—'],
+     ['👥',o.receiver==='me'||!o.receiver?'Получатель: Я':('Получатель: '+(o.receiver.name||'')+(o.receiver.phone?' · '+o.receiver.phone:''))]
+    ].forEach(([ic,v])=>{
+      const r=el('div',{css:'display:flex;align-items:center;gap:8px;padding:4px 0;'});
+      r.appendChild(el('span',{css:'font-size:16px;'},[ ic]));
+      r.appendChild(el('span',{css:'font-size:13px;font-weight:600;'},[v]));
+      cli.appendChild(r);
+    });
+    scr.appendChild(cli);
+
+    const payState=o.payState||'waiting_requisites';
+
+    // ── ВВОД РЕКВИЗИТОВ ──
+    if(payState==='waiting_requisites'){
+      const hd=el('div',{css:'background:rgba(255,214,10,.1);border:1.5px solid rgba(255,214,10,.4);border-radius:16px;padding:14px 16px;text-align:center;margin-bottom:16px;animation:pulse 1.5s ease-in-out infinite;'});
+      hd.appendChild(el('div',{css:'font-size:16px;font-weight:800;color:var(--gold);'},['⏳ Ожидает реквизитов']));
+      scr.appendChild(hd);
+
+      scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Банк']));
+      const bankSel=el('select',{
+        css:'width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 16px;font-size:16px;color:var(--txt);outline:none;margin-bottom:12px;-webkit-appearance:none;appearance:none;'
+      });
+      BANKS.forEach(b=>{const opt=document.createElement('option');opt.value=b.id;opt.textContent=b.name;bankSel.appendChild(opt);});
+      scr.appendChild(bankSel);
+
+      scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['ФИО получателя']));
+      const nameI=el('input',{cls:'inp',css:'margin-bottom:12px;',placeholder:'Иван Иванов'});
+      scr.appendChild(nameI);
+
+      scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Номер телефона']));
+      const phoneI=el('input',{cls:'inp',css:'margin-bottom:20px;',placeholder:'+7 (999) 999-99-99',type:'tel'});
+      scr.appendChild(phoneI);
+
+      const btnRow=el('div',{css:'display:flex;gap:10px;'});
+
+      const sendB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
+        if(!nameI.value.trim()||!phoneI.value.trim()){showNotif('Заполните все поля','⚠️');return;}
+        const bank=BANKS.find(b=>b.id===bankSel.value)||BANKS[0];
+        const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim()};
+        // Обновляем на сервере
+        await setOrderState(ordId, upd);
+        // Обновляем локально
+        Object.assign(o, upd);
+        o.status='Ожидаем оплаты';
+        addLog('Реквизиты отправлены по заказу №'+ordId,'Банк: '+bank.name);
+        notifyAdmin({action:'requisites_sent',orderId:String(ordId),bankName:bank.name});
+        save();showNotif('Реквизиты отправлены!','✅');
+        S.adminDetail=null;render();
+      }});
+      sendB.textContent='Отправить реквизиты';
+
+      const cancelB=el('button',{
+        css:'flex:1;padding:17px;border-radius:20px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:16px;font-weight:700;cursor:pointer;',
+        onClick:async()=>{
+          await setOrderState(ordId,{payState:'cancelled'});
+          o.status='Отменён';o.payState='cancelled';
+          addLog('Заказ №'+ordId+' отменён администратором','');
+          notifyAdmin({action:'order_cancelled',orderId:String(ordId)});
+          save();showNotif('Заказ отменён','❌');S.adminDetail=null;render();
+        }});
+      cancelB.textContent='❌ Отменить';
+      btnRow.appendChild(sendB);btnRow.appendChild(cancelB);scr.appendChild(btnRow);
+    }
+
+    // ── ПОДТВЕРЖДЕНИЕ ОПЛАТЫ ──
+    else if(payState==='paid'){
+      const alert=el('div',{css:'background:rgba(255,214,10,.12);border:2px solid var(--gold);border-radius:16px;padding:16px;text-align:center;margin-bottom:16px;animation:pulse 1.5s ease-in-out infinite;'});
+      alert.appendChild(el('div',{css:'font-size:18px;font-weight:800;color:var(--gold);'},['💰 ПОДТВЕРДИТЕ ОПЛАТУ']));
+      alert.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-top:4px;'},['Клиент сообщил об оплате по заказу №'+ordId]));
+      scr.appendChild(alert);
+
+      const btnRow=el('div',{css:'display:flex;gap:10px;'});
+      const confB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
+        await setOrderState(ordId,{payState:'confirmed'});
+        o.status='Доставляется';o.payState='confirmed';
+        addLog('Оплата подтверждена по заказу №'+ordId,'');
+        notifyAdmin({action:'order_confirmed',orderId:String(ordId)});
+        // Начисляем баллы когда закрываем через ЗАКРЫТ, не здесь
+        save();showNotif('Оплата подтверждена!','✅');S.adminDetail=null;render();
+      }});
+      confB.textContent='✅ Деньги получены';
+
+      const cancelB=el('button',{
+        css:'flex:1;padding:17px;border-radius:20px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:16px;font-weight:700;cursor:pointer;',
+        onClick:async()=>{
+          await setOrderState(ordId,{payState:'cancelled'});
+          o.status='Отменён';o.payState='cancelled';
+          addLog('Оплата отклонена по заказу №'+ordId,'');
+          save();showNotif('Заказ отменён','❌');S.adminDetail=null;render();
+        }});
+      cancelB.textContent='❌ Отменить';
+      btnRow.appendChild(confB);btnRow.appendChild(cancelB);scr.appendChild(btnRow);
+    }
+
+    // ── РЕКВИЗИТЫ ОТПРАВЛЕНЫ, ЖДЁМ ОПЛАТЫ ──
+    else if(payState==='requisites_sent'){
+      const hd=el('div',{css:'background:rgba(74,181,255,.1);border:1px solid rgba(74,181,255,.3);border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;'});
+      hd.appendChild(el('div',{css:'font-size:15px;font-weight:700;color:var(--blue);'},['⏳ Ожидаем оплату от клиента']));
+      scr.appendChild(hd);
+      // Кнопки смены статуса
+      buildOrderStatusButtons(scr,o,ordId);
+    }
+
+    // ── ЗАКАЗ ЗАКРЫТ/ОТМЕНЁН ──
+    else{
+      const c=ORDER_COLORS[o.status]||['var(--txt2)','rgba(128,128,128,.1)'];
+      const hd=el('div',{css:'background:'+c[1]+';border:1px solid '+c[0]+'44;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;'});
+      hd.appendChild(el('div',{css:'font-size:15px;font-weight:700;color:'+c[0]+';'},[clientStatus(o.status)]));
+      scr.appendChild(hd);
+      buildOrderStatusButtons(scr,o,ordId);
+    }
+    return;
+  }
+
+  // ── СПИСОК ЗАКАЗОВ ──────────────────────────────────────────────────────
+  // Таб: Текущие / Архив
+  if(S._ordTab===undefined)S._ordTab=0;
   const tabRow=el('div',{css:'display:flex;gap:8px;margin-bottom:14px;'});
-  tabs.forEach((lb,i)=>{
-    const b=el('div',{cls:'fpill'+(!S._ordTab&&i===0||S._ordTab===i?' on':''),onClick:()=>{S._ordTab=i;render();}});
-    b.textContent=lb;tabRow.appendChild(b);
+  [['Текущие',0],['Архив',1]].forEach(([lb,i])=>{
+    const b=el('div',{cls:'fpill'+(S._ordTab===i?' on':''),css:'position:relative;',
+      onClick:()=>{S._ordTab=i;render();}});
+    b.textContent=lb;
+    // Красный badge если есть заказы требующие внимания
+    if(i===0){
+      const needAction=S.orders.filter(o=>{
+        const ps=o.payState||'';
+        return ps==='waiting_requisites'||ps==='paid';
+      }).length;
+      if(needAction>0){
+        b.appendChild(el('div',{css:'position:absolute;top:-4px;right:-4px;background:#ff375f;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;'},[String(needAction)]));
+      }
+    }
+    tabRow.appendChild(b);
   });
   scr.appendChild(tabRow);
-  const current=!S._ordTab||S._ordTab===0;
+
+  const current=S._ordTab===0;
+  const now=Date.now();const sixMo=6*30*24*3600*1000;
   const items=S.orders.filter(o=>{
     const arch=['ЗАКРЫТ','ОТМЕНЁН','Завершён','Отменён'].includes(o.status);
-    return current?!arch:arch;
+    if(current) return !arch;
+    return arch&&(!o.ts||(now-o.ts)<sixMo);
   });
-  if(!items.length){scr.appendChild(el('div',{css:'color:var(--txt3);font-size:14px;'},['Нет заказов']));return;}
+
+  if(!items.length){
+    scr.appendChild(el('div',{css:'text-align:center;padding:40px;color:var(--txt3);font-size:14px;'},
+      [current?'Нет активных заказов':'Архив пуст']));
+    return;
+  }
+
   items.forEach(o=>{
-    const card=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:14px;margin-bottom:10px;'});
-    const top=el('div',{css:'display:flex;justify-content:space-between;margin-bottom:10px;'});
-    top.appendChild(el('span',{css:'font-size:14px;font-weight:700;'},['Заказ №'+o.id+' · '+o.date]));
-    top.appendChild(el('span',{css:'font-size:14px;font-weight:800;color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽']));
-    card.appendChild(top);
-    const stRow=el('div',{css:'display:flex;gap:5px;flex-wrap:wrap;'});
-    ORDER_STATUSES.forEach(st=>{
-      const active=o.status===st;
-      const b=el('button',{
-        css:'padding:4px 10px;border-radius:100px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid '+(active?'var(--accent)':'rgba(255,255,255,.1)')+';background:'+(active?'rgba(191,90,242,.15)':'transparent')+';color:'+(active?'var(--accent)':'var(--txt3)')+';',
-        onClick:()=>{
-          const old=o.status;o.status=st;
-          addLog('Статус заказа №'+o.id+': '+old+' → '+st,'');
-          // Если ЗАКРЫТ — начисляем баллы
-          if(st==='ЗАКРЫТ'&&S.user&&!o._pointsGiven){
-            o._pointsGiven=true;
-            const earned=Math.floor(o.total*0.05);
-            S.user.petals=(S.user.petals||0)+earned;
-            addLog('Начислено ☘️'+earned+' пользователю','Заказ №'+o.id);
-            showNotif('Баллы начислены: +'+earned+' ☘️');
-          }
-          save();render();
-        }});
-      b.textContent=st;stRow.appendChild(b);
+    const ps=o.payState||'';
+    const needsAction=ps==='waiting_requisites'||ps==='paid';
+    const st=clientStatus(o.status);
+    const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','rgba(128,128,128,.1)'];
+
+    const card=el('div',{
+      css:'background:rgba(255,255,255,.05);border:1.5px solid '+(needsAction?'var(--gold)':'rgba(255,255,255,.08)')+';border-radius:18px;padding:14px;margin-bottom:10px;cursor:pointer;position:relative;'+(needsAction?'box-shadow:0 0 20px rgba(255,214,10,.15);animation:pulse 2s ease-in-out infinite;':''),
+      onClick:()=>{S.adminDetail={_orderId:o.id};render();}
     });
-    card.appendChild(stRow);
-    card.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);margin-top:8px;'},['📍 '+o.address]));
+
+    // Красная полоска если требует внимания
+    if(needsAction){
+      const dot=el('div',{css:'position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:#ff375f;box-shadow:0 0 8px rgba(255,55,95,.6);'});
+      card.appendChild(dot);
+    }
+
+    const top=el('div',{css:'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'});
+    top.appendChild(el('span',{css:'font-size:14px;font-weight:700;'},['Заказ №'+o.id+' · '+o.date]));
+    top.appendChild(el('span',{css:'font-size:13px;font-weight:800;color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽']));
+    card.appendChild(top);
+
+    const mid=el('div',{css:'display:flex;justify-content:space-between;align-items:center;'});
+    mid.appendChild(el('span',{css:'font-size:12px;color:var(--txt2);'},[o.userName||'—']+' · '+(o.userPhone||'—')));
+    const stPill=el('div',{css:'background:'+(needsAction?'rgba(255,214,10,.15)':c[1])+';color:'+(needsAction?'var(--gold)':c[0])+';border-radius:100px;padding:3px 10px;font-size:11px;font-weight:700;'});
+    stPill.textContent=needsAction?(ps==='waiting_requisites'?'Нужны реквизиты':'Проверить оплату'):st;
+    mid.appendChild(stPill);
+    card.appendChild(mid);
     scr.appendChild(card);
   });
+}
+
+// Кнопки смены статуса для завершённых заказов
+function buildOrderStatusButtons(scr,o,ordId){
+  scr.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);font-weight:700;margin-bottom:8px;letter-spacing:.5px;'},['СМЕНИТЬ СТАТУС']));
+  const stRow=el('div',{css:'display:flex;gap:5px;flex-wrap:wrap;'});
+  ORDER_STATUSES.forEach(st=>{
+    const active=o.status===st;
+    const b=el('button',{
+      css:'padding:6px 12px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid '+(active?'var(--accent)':'rgba(255,255,255,.1)')+';background:'+(active?'rgba(191,90,242,.15)':'transparent')+';color:'+(active?'var(--accent)':'var(--txt3)')+';',
+      onClick:async()=>{
+        const old=o.status;o.status=st;
+        addLog('Статус заказа №'+o.id+': '+old+' → '+st,'');
+        if(st==='ЗАКРЫТ'&&S.user&&!o._pointsGiven){
+          o._pointsGiven=true;
+          const earned=Math.floor(o.total*0.05);
+          S.user.petals=(S.user.petals||0)+earned;
+          addLog('Начислено ☘️'+earned+' (заказ №'+o.id+')','');
+          showNotif('Начислено +'+earned+' ☘️');
+        }
+        if(st==='ОТМЕНЁН'){o.payState='cancelled';await setOrderState(o.id,{payState:'cancelled'});}
+        save();render();
+      }});
+    b.textContent=st;stRow.appendChild(b);
+  });
+  scr.appendChild(stRow);
 }
 
 function buildAdminUsers(scr){
@@ -1813,6 +2058,17 @@ function buildAdminUsers(scr){
         addLog('Изменены данные: '+u.name,'Лепестки: '+old.petals+'→'+u.petals+', Бутоны: '+old.buds+'→'+u.buds);
         save();showNotif('Сохранено ✅');
       }});sv.textContent='Сохранить';scr.appendChild(sv);
+      // Удаление аккаунта
+      const delAccB=el('button',{
+        css:'width:100%;margin-top:14px;padding:15px;border-radius:18px;border:1.5px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-size:15px;font-weight:700;cursor:pointer;',
+        onClick:()=>{
+          if(!confirm('Удалить аккаунт '+u.name+'? Это действие нельзя отменить.'))return;
+          addLog('Удалён аккаунт: '+u.name,'');
+          S.user=null;S.orders=[];S.cart={};S.chats=[];
+          save();showNotif('Аккаунт удалён','🗑');
+          S.adminDetail=null;render();
+        }});
+      delAccB.textContent='🗑 Удалить аккаунт';scr.appendChild(delAccB);
       scr.appendChild(el('div',{css:'font-size:14px;font-weight:700;margin-top:20px;margin-bottom:10px;'},['Рефералы: '+u.referred+', Бутонов: '+(u.buds||0)]));
       const userOrders=S.orders;
       scr.appendChild(el('div',{css:'font-size:14px;font-weight:700;margin-bottom:8px;'},['Заказы ('+userOrders.length+')']));

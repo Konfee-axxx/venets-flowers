@@ -391,51 +391,96 @@ function save(){
   try{localStorage.setItem('vn4',JSON.stringify({u:S.user,c:S.cart,o:S.orders,ch:S.chats,flowers:FLOWERS,gifts:GIFTS,unread:S.unreadChats}));}catch(e){}
 }
 
-// ══ SERVER STATE — централизованное хранилище через /api/order-state ══
-const STATE_URL = '/api/order-state';
+// ══ ЛОКАЛЬНОЕ ХРАНИЛИЩЕ ЗАКАЗОВ (localStorage) ══════════════════
+// Ключ общий — admin и user используют один браузер/localStorage.
+// Для cross-device: реквизиты передаются через TG deeplink.
 
-// Установить состояние заказа на сервере
-async function setOrderState(id, data){
-  try{
-    await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'set_order',orderId:String(id),data})});
-  }catch(e){}
-}
+const ORD_KEY = 'vn_ord';
 
-// Получить состояние заказа с сервера
-async function getOrderState(id){
+function getLocalOrderState(id){
   try{
-    const r=await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'get_order',orderId:String(id)})});
-    const d=await r.json();
-    return d.state||null;
+    const all=JSON.parse(localStorage.getItem(ORD_KEY)||'{}');
+    return all[String(id)]||null;
   }catch(e){return null;}
 }
 
-// Получить все pending заказы для админ-панели
-async function getPendingOrders(){
+function setLocalOrderState(id, data){
   try{
-    const r=await fetch(STATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'get_pending'})});
-    const d=await r.json();
-    return d.orders||[];
-  }catch(e){return [];}
-}
-
-// Уведомление в TG бот (fire-and-forget)
-async function notifyAdmin(body){
-  try{
-    await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(body)});
+    const all=JSON.parse(localStorage.getItem(ORD_KEY)||'{}');
+    all[String(id)]={...(all[String(id)]||{}), ...data, _ts:Date.now()};
+    localStorage.setItem(ORD_KEY, JSON.stringify(all));
   }catch(e){}
 }
+
+// Алиасы чтобы не менять остальной код
+async function setOrderState(id, data){
+  setLocalOrderState(id, data);
+  // Если отправляются реквизиты и есть userTgId — шлём через бот
+  if(data && data.payState==='requisites_sent' && data.userTgId){
+    try{
+      await fetch('/api/order-state',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'send_requisites', orderId:String(id), data})
+      });
+    }catch(e){}
+  }
+  // Если оплачено — уведомляем админа
+  if(data && data.payState==='paid'){
+    try{
+      await fetch('/api/poll',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'paid', orderId:String(id)})
+      });
+    }catch(e){}
+  }
+}
+
+async function getOrderState(id){
+  return getLocalOrderState(id);
+}
+
 
 function getTgId(){
   try{return window.Telegram?.WebApp?.initDataUnsafe?.user?.id||null;}catch(e){return null;}
 }
 
+// Сохраняем/загружаем checkout для восстановления при вылете
+const CO_KEY='vn_co';
+function saveCheckout(co){
+  if(!co||!co.orderId)return;
+  try{
+    // Сохраняем только сериализуемые поля (без таймеров)
+    const safe={
+      step:co.step, orderId:co.orderId, total:co.total, disc:co.disc||0,
+      receiver:co.receiver, otherName:co.otherName||'', otherPhone:co.otherPhone||'',
+      addrIdx:co.addrIdx||0, payStatus:co.payStatus,
+      payBankId:co.payBank?.id||null, payBankName:co.payBank?.name||null,
+      payPhone:co.payPhone||null, payName:co.payName||null,
+      _deadline:co._deadline||null,
+    };
+    localStorage.setItem(CO_KEY, JSON.stringify(safe));
+  }catch(e){}
+}
+function clearCheckout(){
+  try{localStorage.removeItem(CO_KEY);}catch(e){}
+}
+function loadCheckout(){
+  try{
+    const s=localStorage.getItem(CO_KEY);
+    if(!s)return null;
+    const d=JSON.parse(s);
+    if(!d||!d.orderId)return null;
+    // Восстанавливаем объект bank из id/name
+    if(d.payBankId||d.payBankName){
+      d.payBank=BANKS.find(b=>b.id===d.payBankId)||BANKS.find(b=>b.name===d.payBankName)||null;
+    }
+    return d;
+  }catch(e){return null;}
+}
 
-// ══════════════════════════════════════════
+
 // УТИЛИТЫ
 // ══════════════════════════════════════════
 function el(tag,props,kids){
@@ -496,15 +541,48 @@ function buildRoot(){
     const fab=el('button',{cls:'fab',onClick:()=>{S.cartOpen=true;render();}},['🪣']);
     if(cnt>0)fab.appendChild(el('div',{cls:'fab-badge'},[txt(cnt)]));
     scr.appendChild(fab);
-    // Правка 11: плавающая таблетка заказа
+    // Таблетка активного заказа
     const ao=activeOrders()[0];
     if(ao){
-      const c=ORDER_COLORS[ao.status]||ORDER_COLORS['Заказ создан'];
-      const fab2=el('div',{cls:'order-fab',css:'color:'+c[0]+';border-color:'+c[0]+'66;',
-        onClick:()=>{S.profSec='orders';S.tab=2;render();}});
-      fab2.appendChild(el('span',{},['Заказ №'+ao.id]));
-      fab2.appendChild(el('span',{css:'background:'+c[1]+';color:'+c[0]+';border-radius:100px;padding:2px 8px;font-size:10px;'},[clientStatus(ao.status)]));
-      scr.appendChild(fab2);
+      const ordState=getLocalOrderState(ao.id)||{};
+      const isPayStep=ao.payState==='waiting_requisites'||ao.payState==='paid';
+      const isOnPayPage=ordState.payState==='requisites_sent'&&!ao.payState==='confirmed';
+      const savedCo=loadCheckout();
+      const isIncomplete=savedCo&&savedCo.orderId===ao.id&&savedCo.step>0&&savedCo.step<7;
+
+      // Мигающая красная таблетка если заказ на этапе оплаты
+      if(isIncomplete&&(savedCo.step===5||savedCo.step===4)){
+        const fab2=el('div',{cls:'order-fab',
+          id:'order_fab_timer',
+          css:'color:#ff375f;border-color:rgba(255,55,95,.7);animation:pulse 1.5s ease-in-out infinite;',
+          onClick:()=>showResumeOrderDialog(ao,savedCo)});
+        fab2.appendChild(el('span',{css:'font-weight:800;'},['💳 Оплата №'+ao.id]));
+        // Таймер если на шаге 5
+        if(savedCo.step===5&&savedCo._deadline){
+          const timerEl=el('span',{id:'fabTimer',css:'background:rgba(255,55,95,.2);color:#ff375f;border-radius:100px;padding:2px 8px;font-size:10px;font-weight:700;'},['...']);
+          fab2.appendChild(timerEl);
+          function updateFabTimer(){
+            const el2=document.getElementById('fabTimer');
+            if(!el2)return;
+            const s=Math.max(0,Math.ceil((savedCo._deadline-Date.now())/1000));
+            const m=Math.floor(s/60),sec=s%60;
+            el2.textContent=m+':'+(sec<10?'0':'')+sec;
+            if(s>0)setTimeout(updateFabTimer,1000);
+          }
+          setTimeout(updateFabTimer,0);
+        }
+        scr.appendChild(fab2);
+      }else{
+        const c=ORDER_COLORS[ao.status]||ORDER_COLORS['Заказ создан'];
+        const fab2=el('div',{cls:'order-fab',css:'color:'+c[0]+';border-color:'+c[0]+'66;',
+          onClick:()=>{
+            if(isIncomplete){showResumeOrderDialog(ao,savedCo);}
+            else{S.profSec='orders';S.tab=2;render();}
+          }});
+        fab2.appendChild(el('span',{},['Заказ №'+ao.id]));
+        fab2.appendChild(el('span',{css:'background:'+c[1]+';color:'+c[0]+';border-radius:100px;padding:2px 8px;font-size:10px;'},[clientStatus(ao.status)]));
+        scr.appendChild(fab2);
+      }
     }
   }
   if(S.cartOpen)scr.appendChild(buildCart());
@@ -919,7 +997,7 @@ function buildCO1(page){
   const canContinue=co._tempAddr?!!co._tempAddr.street:addrs.length>0;
   const b=el('button',{cls:'btn-prim',onClick:()=>{
     if(!canContinue){showNotif('Введите адрес','⚠️');return;}
-    co.step=2;render();
+    co.step=2;saveCheckout(co);render();
   }});
   b.textContent='Продолжить →';b.style.opacity=canContinue?'1':'0.4';
   foot.appendChild(b);page.appendChild(foot);
@@ -944,7 +1022,7 @@ function buildCO2(page){
   tot.appendChild(el('span',{css:'font-size:18px;font-weight:800;color:var(--accent);'},[S.checkout.total.toLocaleString('ru')+' ₽']));
   scr.appendChild(tot);page.appendChild(scr);
   const foot=el('div',{css:'display:flex;flex-direction:column;gap:8px;padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const ok=el('button',{cls:'btn-prim',onClick:()=>{S.checkout.step=3;render();}});ok.textContent='Да, всё верно! ✓';
+  const ok=el('button',{cls:'btn-prim',onClick:()=>{S.checkout.step=3;saveCheckout(S.checkout);render();}});ok.textContent='Да, всё верно! ✓';
   const bk=el('button',{css:'padding:14px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',onClick:()=>{S.checkout=null;render();}});bk.textContent='Нет, хочу изменить';
   foot.appendChild(ok);foot.appendChild(bk);page.appendChild(foot);
 }
@@ -969,7 +1047,7 @@ function buildCO3(page){
   }
   page.appendChild(scr);
   const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const b=el('button',{cls:'btn-prim'+(co.receiver?'':' disabled'),onClick:()=>{if(co.receiver){co.step=4;render();}}});
+  const b=el('button',{cls:'btn-prim'+(co.receiver?'':' disabled'),onClick:()=>{if(co.receiver){co.step=4;saveCheckout(co);render();}}});
   b.textContent='Продолжить →';b.disabled=!co.receiver;
   foot.appendChild(b);page.appendChild(foot);
 }
@@ -986,16 +1064,19 @@ function buildCO4(page){
       receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
       disc:co.disc,
       userName:S.user.name||'—',userPhone:S.user.phone||'—',
-      userTgId:getTgId(), // TG ID для отправки реквизитов через бот
-      payState:'waiting_requisites' // ожидает реквизиты от админа
+      userTgId:getTgId(),
+      payState:'waiting_requisites',
+      ts:Date.now()
     };
     S.orders.unshift(order);
     if(co.disc>0&&S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
     co.orderId=order.id;
     addLog('Создан заказ №'+order.id,'Сумма: '+order.total+' ₽');
+    // СИНХРОННО сохраняем в localStorage
+    setLocalOrderState(order.id, order);
     save();
-    // Сохраняем в shared localStorage чтобы админ видел
-    setOrderState(order.id, order);  // async fire-and-forget
+    // Сохраняем checkout для восстановления
+    saveCheckout(co);
     // Уведомление в TG бот (fire-and-forget)
     notifyAdmin({action:'new_order',orderData:{
       id:order.id,total:order.total,
@@ -1015,9 +1096,12 @@ function buildCO4(page){
       const md=document.getElementById('co4msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CO_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
     },2000);
-    // Server polling — проверяем /api/order-state каждые 2.5 сек
-    co._pollTimer=setInterval(async()=>{
-      const ord=await getOrderState(co.orderId);
+    // localStorage polling — синхронный, мгновенный, 100% надёжный
+    co._pollTimer=setInterval(()=>{
+      if(!S.checkout||S.checkout.orderId!==co.orderId){
+        clearInterval(co._pollTimer);co._pollTimer=null;return;
+      }
+      const ord=getLocalOrderState(co.orderId);
       if(!ord)return;
       if(ord.payState==='cancelled'){
         clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
@@ -1028,9 +1112,9 @@ function buildCO4(page){
         co.payBank=BANKS.find(b=>b.id===ord.payBankId)||BANKS.find(b=>b.name===ord.payBank)||BANKS[0];
         co.payPhone=ord.payPhone||'—';
         co.payName=ord.payName||'—';
-        co.step=5;render();
+        co.step=5;saveCheckout(co);render();
       }
-    },2500);
+    },1000);
   }
 }
 function buildCO5(page){
@@ -1065,13 +1149,13 @@ function buildCO5(page){
   const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
   const payBtn=el('button',{id:'paidBtn',cls:'btn-prim',onClick:()=>{
     // Записываем в shared state что пользователь оплатил
-    setOrderState(co.orderId,{payState:'paid',status:'Ожидаем подтверждения'});
+    setLocalOrderState(co.orderId,{payState:'paid',status:'Ожидаем подтверждения'});
     const ord=S.orders.find(o=>o.id===co.orderId);
     if(ord){ord.status='Ожидаем подтверждения';ord.payState='paid';save();}
     addLog('Оплата заказа №'+co.orderId,'Ожидаем подтверждения');
     // Уведомление админу
     notifyAdmin({action:'paid',orderId:String(co.orderId)});
-    co.step=6;render();
+    co.step=6;saveCheckout(co);render();
   }});
   payBtn.textContent='Я оплатил ✓';payBtn.disabled=!co._paidEnabled;payBtn.style.opacity=co._paidEnabled?'1':'0.4';
   foot.appendChild(payBtn);page.appendChild(foot);
@@ -1091,9 +1175,12 @@ function buildCO6(page){
       const md=document.getElementById('co6msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=PAY_MSGS[Math.min(idx,PAY_MSGS.length-1)];md.style.opacity='1';}},500);}
     },3000);
-    // Server polling — ждём подтверждения или отмены от администратора
-    co._confirmPoll=setInterval(async()=>{
-      const ord=await getOrderState(co.orderId);
+    // localStorage polling — синхронный
+    co._confirmPoll=setInterval(()=>{
+      if(!S.checkout||S.checkout.orderId!==co.orderId){
+        clearInterval(co._confirmPoll);co._confirmPoll=null;return;
+      }
+      const ord=getLocalOrderState(co.orderId);
       if(!ord)return;
       if(ord.payState==='confirmed'){
         clearInterval(co._confirmPoll);clearInterval(co._payMsgTimer);
@@ -1104,7 +1191,7 @@ function buildCO6(page){
         co._confirmPoll=null;co._payMsgTimer=null;
         co.payStatus='fail';co.step=7;render();
       }
-    },2500);
+    },1000);
   }
 }
 function buildCO7(page){
@@ -1118,13 +1205,13 @@ function buildCO7(page){
       onClick:()=>{S.chatOpen=true;S.checkout=null;S.tab=2;render();}});
     sb.textContent='Связаться с поддержкой';
     const ob=el('button',{cls:'btn-prim',
-      onClick:()=>{S.cart={};S.usePetals=false;S.checkout=null;save();render();}});
+      onClick:()=>{S.cart={};S.usePetals=false;S.checkout=null;clearCheckout();save();render();}});
     ob.textContent='Ура! 🌸';
     scr.appendChild(sb);scr.appendChild(ob);
   }else{
     // Обновляем статус заказа
     const ord=S.orders.find(o=>o.id===co.orderId);
-    if(ord&&!ord._cancelDone){ord._cancelDone=true;ord.status='Отменён';ord.payState='cancelled';save();}
+    if(ord&&!ord._cancelDone){ord._cancelDone=true;ord.status='Отменён';ord.payState='cancelled';clearCheckout();save();}
     scr.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;'},['😔']));
     scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['Что‑то пошло не так']));
     scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px;'},['Не переживайте! Свяжитесь с поддержкой\nи мы всё решим.']));
@@ -1290,14 +1377,36 @@ function buildProfSec(){
     else visible.forEach(o=>{
       const st=clientStatus(o.status);
       const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','var(--glass)'];
-      const card=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);cursor:pointer;',
+      const savedCo=loadCheckout();
+      const isIncomplete=savedCo&&savedCo.orderId===o.id&&savedCo.step>0&&savedCo.step<7;
+      const card=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid '+(isIncomplete?'rgba(255,214,10,.5)':'rgba(255,255,255,.08)')+';border-radius:20px;padding:16px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);cursor:pointer;',
         onClick:()=>{S._orderDetail=o;S.profSec='orderDetail';render();}});
       const top=el('div',{css:'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'});
       top.appendChild(el('div',{css:'font-size:15px;font-weight:700;'},['Заказ №'+o.id]));
       top.appendChild(el('div',{css:'background:'+c[1]+';color:'+c[0]+';border-radius:100px;padding:3px 12px;font-size:11px;font-weight:700;'},[st]));
       card.appendChild(top);
       card.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:4px;'},[o.date+' · '+o.address]));
-      card.appendChild(el('div',{css:'font-size:18px;font-weight:800;color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽']));
+      card.appendChild(el('div',{css:'font-size:18px;font-weight:800;color:var(--accent);margin-bottom:'+(isIncomplete?'8':'0')+'px;'},[o.total.toLocaleString('ru')+' ₽']));
+      // Кнопка восстановления
+      if(isIncomplete){
+        const row=el('div',{css:'display:flex;gap:8px;margin-top:10px;'});
+        const contB=el('button',{
+          css:'flex:1;padding:10px;border-radius:14px;background:rgba(255,214,10,.15);border:1px solid rgba(255,214,10,.4);color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;',
+          onClick:(e)=>{e.stopPropagation();showResumeOrderDialog(o,savedCo);}});
+        contB.textContent='▶ Продолжить оформление';
+        const cancelB=el('button',{
+          css:'padding:10px 14px;border-radius:14px;background:rgba(255,55,95,.1);border:1px solid rgba(255,55,95,.3);color:var(--pink);font-size:13px;font-weight:700;cursor:pointer;',
+          onClick:(e)=>{
+            e.stopPropagation();
+            o.status='Отменён';o.payState='cancelled';
+            setLocalOrderState(o.id,{payState:'cancelled'});
+            clearCheckout();addLog('Заказ №'+o.id+' отменён клиентом','');
+            save();showNotif('Заказ отменён','❌');render();
+          }});
+        cancelB.textContent='✕';
+        row.appendChild(contB);row.appendChild(cancelB);
+        card.appendChild(row);
+      }
       scr.appendChild(card);
     });
   }
@@ -1668,6 +1777,60 @@ function obRoulette(){
   }});
   spinBtn.textContent='🎰 Крутить!';d.appendChild(spinBtn);return d;
 }
+// Диалог: продолжить оформление или отменить
+function showResumeOrderDialog(order,savedCo){
+  const ov=el('div',{cls:'overlay fade-in',onClick:(e)=>{if(e.target===ov)ov.remove();}});
+  const sh=el('div',{cls:'sheet slide-up',css:'padding-bottom:calc(20px + var(--safe-b));'});
+  sh.appendChild(el('div',{cls:'drag'}));
+  sh.appendChild(el('div',{css:'font-size:18px;font-weight:800;text-align:center;padding:0 18px 6px;'},['Заказ №'+order.id]));
+  sh.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);text-align:center;padding:0 18px 18px;'},['Оформление не завершено. Продолжить?']));
+
+  const contB=el('button',{cls:'btn-prim',css:'margin:0 18px;width:calc(100% - 36px);',
+    onClick:()=>{
+      ov.remove();
+      // Восстанавливаем checkout из сохранённого
+      S.checkout={
+        step:savedCo.step||4,
+        orderId:savedCo.orderId,
+        total:savedCo.total||order.total,
+        disc:savedCo.disc||0,
+        receiver:savedCo.receiver||'me',
+        otherName:savedCo.otherName||'',
+        otherPhone:savedCo.otherPhone||'',
+        addrIdx:savedCo.addrIdx||0,
+        payStatus:savedCo.payStatus||null,
+        payBank:savedCo.payBank||null,
+        payPhone:savedCo.payPhone||null,
+        payName:savedCo.payName||null,
+        _deadline:savedCo._deadline||null,
+        msgIdx:0,
+        _paidEnabled:savedCo.step===5, // если возвращаемся на шаг оплаты — кнопка уже активна
+      };
+      render();
+    }});
+  contB.textContent='▶ Продолжить оформление';
+
+  const cancelB=el('button',{
+    css:'display:block;width:calc(100% - 36px);margin:10px 18px 0;padding:15px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',
+    onClick:()=>{
+      ov.remove();
+      // Отменяем заказ
+      order.status='Отменён';order.payState='cancelled';
+      setLocalOrderState(order.id,{payState:'cancelled'});
+      clearCheckout();
+      addLog('Заказ №'+order.id+' отменён клиентом','');
+      save();
+      showNotif('Заказ отменён','❌');
+      render();
+    }});
+  cancelB.textContent='✕ Отменить заказ';
+
+  sh.appendChild(contB);
+  sh.appendChild(cancelB);
+  ov.appendChild(sh);
+  document.getElementById('app').appendChild(ov);
+}
+
 function buildFAQ(question,answer){
   let open=false;
   const item=el('div',{cls:'faq-item'});
@@ -1867,7 +2030,7 @@ function buildAdminOrders(scr){
         const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim(),
           userTgId:o.userTgId||null, orderId:String(ordId)};
         // Обновляем на сервере
-        await setOrderState(ordId, upd);
+        setLocalOrderState(ordId, upd); // sync localStorage
         // Обновляем локально
         Object.assign(o, upd);
         o.status='Ожидаем оплаты';
@@ -1881,7 +2044,7 @@ function buildAdminOrders(scr){
       const cancelB=el('button',{
         css:'flex:1;padding:17px;border-radius:20px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:16px;font-weight:700;cursor:pointer;',
         onClick:async()=>{
-          await setOrderState(ordId,{payState:'cancelled'});
+          setLocalOrderState(ordId,{payState:'cancelled'});
           o.status='Отменён';o.payState='cancelled';
           addLog('Заказ №'+ordId+' отменён администратором','');
           notifyAdmin({action:'order_cancelled',orderId:String(ordId)});
@@ -1900,7 +2063,7 @@ function buildAdminOrders(scr){
 
       const btnRow=el('div',{css:'display:flex;gap:10px;'});
       const confB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
-        await setOrderState(ordId,{payState:'confirmed'});
+        setLocalOrderState(ordId,{payState:'confirmed'});
         o.status='Доставляется';o.payState='confirmed';
         addLog('Оплата подтверждена по заказу №'+ordId,'');
         notifyAdmin({action:'order_confirmed',orderId:String(ordId)});
@@ -1912,7 +2075,7 @@ function buildAdminOrders(scr){
       const cancelB=el('button',{
         css:'flex:1;padding:17px;border-radius:20px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:16px;font-weight:700;cursor:pointer;',
         onClick:async()=>{
-          await setOrderState(ordId,{payState:'cancelled'});
+          setLocalOrderState(ordId,{payState:'cancelled'});
           o.status='Отменён';o.payState='cancelled';
           addLog('Оплата отклонена по заказу №'+ordId,'');
           save();showNotif('Заказ отменён','❌');S.adminDetail=null;render();
@@ -2027,7 +2190,7 @@ function buildOrderStatusButtons(scr,o,ordId){
           addLog('Начислено ☘️'+earned+' (заказ №'+o.id+')','');
           showNotif('Начислено +'+earned+' ☘️');
         }
-        if(st==='ОТМЕНЁН'){o.payState='cancelled';await setOrderState(o.id,{payState:'cancelled'});}
+        if(st==='ОТМЕНЁН'){o.payState='cancelled';setLocalOrderState(o.id,{payState:'cancelled'});}
         save();render();
       }});
     b.textContent=st;stRow.appendChild(b);
@@ -2226,7 +2389,7 @@ function buildAdminChats(scr){
 // СТАРТ
 // ══════════════════════════════════════════
 
-// Читаем параметр реквизитов из URL (?req=base64)
+// 1) Читаем параметр реквизитов из URL (?req=base64)
 (function checkReqParam(){
   try{
     const urlParams=new URLSearchParams(window.location.search);
@@ -2234,31 +2397,46 @@ function buildAdminChats(scr){
     if(!req)return;
     const decoded=JSON.parse(atob(req.replace(/-/g,'+').replace(/_/g,'/')));
     if(decoded.t==='req'&&decoded.oid){
-      // Находим заказ и восстанавливаем checkout
       const ordId=Number(decoded.oid)||decoded.oid;
       const order=S.orders.find(o=>String(o.id)===String(decoded.oid));
       if(order){
         const bank=BANKS.find(b=>b.id===decoded.bankId)||BANKS.find(b=>b.name===decoded.bank)||BANKS[0];
         S.checkout={
-          step:5,
-          orderId:ordId,
-          total:order.total,
-          disc:order.disc||0,
-          receiver:order.receiver||'me',
-          otherName:'',otherPhone:'',
-          addrIdx:0,
-          payBank:bank,
-          payPhone:decoded.phone||'—',
-          payName:decoded.name||'—',
-          payStatus:null,
-          msgIdx:0,
-          _paidEnabled:false,
-          _paidTimer:null,
+          step:5, orderId:ordId, total:order.total, disc:order.disc||0,
+          receiver:order.receiver||'me', otherName:'', otherPhone:'', addrIdx:0,
+          payBank:bank, payPhone:decoded.phone||'—', payName:decoded.name||'—',
+          payStatus:null, msgIdx:0, _paidEnabled:true, _deadline:Date.now()+5*60*1000,
         };
-        // Убираем параметр из URL без перезагрузки
+        setLocalOrderState(ordId,{payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payPhone:decoded.phone,payName:decoded.name});
         window.history.replaceState({},'',window.location.pathname);
       }
     }
+  }catch(e){}
+})();
+
+// 2) Восстанавливаем незавершённый checkout из localStorage
+(function restoreCheckout(){
+  if(S.checkout)return; // уже установлен из URL
+  try{
+    const saved=loadCheckout();
+    if(!saved||!saved.orderId)return;
+    // Проверяем что заказ ещё не завершён
+    const order=S.orders.find(o=>String(o.id)===String(saved.orderId));
+    if(!order)return;
+    if(['Завершён','Отменён','ЗАКРЫТ','ОТМЕНЁН'].includes(order.status)){clearCheckout();return;}
+    // Если шаг 4 или 5 — проверяем localStorage state на случай если реквизиты пришли пока не было сети
+    if(saved.step===4){
+      const ordState=getLocalOrderState(saved.orderId);
+      if(ordState&&ordState.payState==='requisites_sent'){
+        saved.step=5;
+        saved.payBank=BANKS.find(b=>b.id===ordState.payBankId)||BANKS.find(b=>b.name===ordState.payBank)||BANKS[0];
+        saved.payPhone=ordState.payPhone||'—';
+        saved.payName=ordState.payName||'—';
+        saved._paidEnabled=true;
+      }
+    }
+    // НЕ восстанавливаем автоматически — только показываем диалог через таблетку
+    // S.checkout = saved; // не делаем — пользователь сам решит через таблетку
   }catch(e){}
 })();
 

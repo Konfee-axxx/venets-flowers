@@ -986,6 +986,7 @@ function buildCO4(page){
       receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
       disc:co.disc,
       userName:S.user.name||'—',userPhone:S.user.phone||'—',
+      userTgId:getTgId(), // TG ID для отправки реквизитов через бот
       payState:'waiting_requisites' // ожидает реквизиты от админа
     };
     S.orders.unshift(order);
@@ -1863,7 +1864,8 @@ function buildAdminOrders(scr){
       const sendB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
         if(!nameI.value.trim()||!phoneI.value.trim()){showNotif('Заполните все поля','⚠️');return;}
         const bank=BANKS.find(b=>b.id===bankSel.value)||BANKS[0];
-        const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim()};
+        const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim(),
+          userTgId:o.userTgId||null, orderId:String(ordId)};
         // Обновляем на сервере
         await setOrderState(ordId, upd);
         // Обновляем локально
@@ -2223,6 +2225,43 @@ function buildAdminChats(scr){
 // ══════════════════════════════════════════
 // СТАРТ
 // ══════════════════════════════════════════
+
+// Читаем параметр реквизитов из URL (?req=base64)
+(function checkReqParam(){
+  try{
+    const urlParams=new URLSearchParams(window.location.search);
+    const req=urlParams.get('req');
+    if(!req)return;
+    const decoded=JSON.parse(atob(req.replace(/-/g,'+').replace(/_/g,'/')));
+    if(decoded.t==='req'&&decoded.oid){
+      // Находим заказ и восстанавливаем checkout
+      const ordId=Number(decoded.oid)||decoded.oid;
+      const order=S.orders.find(o=>String(o.id)===String(decoded.oid));
+      if(order){
+        const bank=BANKS.find(b=>b.id===decoded.bankId)||BANKS.find(b=>b.name===decoded.bank)||BANKS[0];
+        S.checkout={
+          step:5,
+          orderId:ordId,
+          total:order.total,
+          disc:order.disc||0,
+          receiver:order.receiver||'me',
+          otherName:'',otherPhone:'',
+          addrIdx:0,
+          payBank:bank,
+          payPhone:decoded.phone||'—',
+          payName:decoded.name||'—',
+          payStatus:null,
+          msgIdx:0,
+          _paidEnabled:false,
+          _paidTimer:null,
+        };
+        // Убираем параметр из URL без перезагрузки
+        window.history.replaceState({},'',window.location.pathname);
+      }
+    }
+  }catch(e){}
+})();
+
 render();
 </script>
 </body>

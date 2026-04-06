@@ -67,7 +67,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 @keyframes fdIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideInLeft{from{transform:translateX(-40px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(-20%);opacity:0}}
 @keyframes spin360{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -75,7 +76,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 
 /* ═══ LAYOUT ═══ */
 #app{height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden;}
-.screen{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;animation:fdIn .3s ease;}
+.screen{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;}
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
 
 /* ═══ НАВ ═══ */
@@ -412,33 +413,47 @@ function setLocalOrderState(id, data){
   }catch(e){}
 }
 
-// Алиасы чтобы не менять остальной код
+// ══ STATE через Vercel KV + localStorage cache ═══════════════════
 async function setOrderState(id, data){
+  // 1. Сразу пишем в localStorage (мгновенно)
   setLocalOrderState(id, data);
-  // Если отправляются реквизиты и есть userTgId — шлём через бот
-  if(data && data.payState==='requisites_sent' && data.userTgId){
-    try{
-      await fetch('/api/order-state',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'send_requisites', orderId:String(id), data})
-      });
-    }catch(e){}
-  }
-  // Если оплачено — уведомляем админа
+  // 2. Пишем в KV через API (работает между устройствами)
+  try{
+    await fetch('/api/order-state',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set_order', orderId:String(id), data})
+    });
+  }catch(e){}
+  // 3. Если оплачено — уведомляем админа
   if(data && data.payState==='paid'){
     try{
-      await fetch('/api/poll',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'paid', orderId:String(id)})
-      });
+      await fetch('/api/poll',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'paid', orderId:String(id)})});
     }catch(e){}
   }
 }
 
 async function getOrderState(id){
-  return getLocalOrderState(id);
+  // 1. Сначала смотрим localStorage (мгновенно)
+  const local = getLocalOrderState(id);
+  // Если в localStorage уже есть актуальный ответ — возвращаем сразу
+  if(local && local.payState && local.payState !== 'waiting_requisites') return local;
+  // 2. Запрашиваем KV (работает между устройствами)
+  try{
+    const r=await fetch('/api/order-state',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'get_order', orderId:String(id)})
+    });
+    const d=await r.json();
+    if(d.state && d.state.payState && d.state.payState!=='waiting_requisites'){
+      // Обновляем localStorage из KV
+      setLocalOrderState(id, d.state);
+      return d.state;
+    }
+  }catch(e){}
+  return local || {payState:'waiting_requisites'};
 }
 
 
@@ -1031,25 +1046,69 @@ function buildCO3(page){
   page.appendChild(coHdr('Получатель',()=>{co.step=2;render();}));
   const scr=el('div',{cls:'scroll',css:'padding:16px 14px 120px;'});
   scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:20px;'},['Кто встретит курьера?']));
+
+  function updateCards(){
+    const cards=scr.querySelectorAll('.receiver-card');
+    cards.forEach(c=>{
+      const v=c.dataset.val;
+      const sel=co.receiver===v;
+      c.style.borderColor=sel?'var(--accent)':'rgba(255,255,255,.1)';
+      c.style.background=sel?'rgba(191,90,242,.1)':'rgba(255,255,255,.04)';
+      c.querySelector('.rc-label').style.color=sel?'var(--accent)':'var(--txt)';
+    });
+    // Показываем/скрываем поля "другой человек"
+    const other=scr.querySelector('.other-fields');
+    if(other)other.style.display=co.receiver==='other'?'block':'none';
+    // Активируем кнопку
+    const btn=page.querySelector('#co3-btn');
+    if(btn){btn.disabled=!co.receiver;btn.style.opacity=co.receiver?'1':'0.4';}
+  }
+
   [['me','Я 👤'],['other','Другой человек 👥']].forEach(([v,lb])=>{
-    const card=el('div',{css:'padding:16px;border-radius:20px;border:1.5px solid '+(co.receiver===v?'var(--accent)':'rgba(255,255,255,.1)')+';background:'+(co.receiver===v?'rgba(191,90,242,.1)':'rgba(255,255,255,.04)')+';margin-bottom:10px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);',onClick:()=>{co.receiver=v;render();}});
-    card.appendChild(el('div',{css:'font-size:16px;font-weight:700;color:'+(co.receiver===v?'var(--accent)':'var(--txt)')+';'},[lb]));
+    const card=document.createElement('div');
+    card.className='receiver-card';
+    card.dataset.val=v;
+    card.style.cssText='padding:16px;border-radius:20px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);margin-bottom:10px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);transition:all .2s;';
+    const lbl=document.createElement('div');
+    lbl.className='rc-label';
+    lbl.style.cssText='font-size:16px;font-weight:700;color:var(--txt);';
+    lbl.textContent=lb;
+    card.appendChild(lbl);
+    // Без render() — просто обновляем стили
+    card.addEventListener('click',()=>{
+      co.receiver=v;
+      updateCards();
+    });
     scr.appendChild(card);
   });
-  if(co.receiver==='other'){
-    const sec=el('div',{css:'margin-top:12px;'});
-    sec.appendChild(el('div',{cls:'inp-label',css:'display:block;'},['Имя']));
-    const ni=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Имя получателя'});ni.value=co.otherName;ni.oninput=()=>{co.otherName=ni.value;};
-    sec.appendChild(ni);
-    sec.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:4px;'},['Телефон']));
-    const pi=el('input',{cls:'inp',placeholder:'+7 ...',type:'tel'});pi.value=co.otherPhone;pi.oninput=()=>{co.otherPhone=pi.value;};
-    sec.appendChild(pi);scr.appendChild(sec);
-  }
+
+  // Поля "другой человек" — скрыты по умолчанию
+  const otherSec=el('div',{cls:'other-fields',css:'margin-top:12px;display:none;'});
+  otherSec.appendChild(el('div',{cls:'inp-label',css:'display:block;'},['Имя']));
+  const ni=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Имя получателя'});
+  ni.value=co.otherName||'';
+  ni.oninput=()=>{co.otherName=ni.value;};
+  otherSec.appendChild(ni);
+  otherSec.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:4px;'},['Телефон']));
+  const pi=el('input',{cls:'inp',placeholder:'+7 ...',type:'tel'});
+  pi.value=co.otherPhone||'';
+  pi.oninput=()=>{co.otherPhone=pi.value;};
+  otherSec.appendChild(pi);
+  scr.appendChild(otherSec);
+
   page.appendChild(scr);
   const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const b=el('button',{cls:'btn-prim'+(co.receiver?'':' disabled'),onClick:()=>{if(co.receiver){co.step=4;saveCheckout(co);render();}}});
-  b.textContent='Продолжить →';b.disabled=!co.receiver;
+  const b=el('button',{id:'co3-btn',cls:'btn-prim',
+    onClick:()=>{
+      if(!co.receiver)return;
+      co.step=4;saveCheckout(co);render();
+    }});
+  b.textContent='Продолжить →';
+  b.disabled=!co.receiver;
+  b.style.opacity=co.receiver?'1':'0.4';
   foot.appendChild(b);page.appendChild(foot);
+  // Применяем начальное состояние
+  updateCards();
 }
 function buildCO4(page){
   const co=S.checkout;
@@ -1090,18 +1149,39 @@ function buildCO4(page){
   const msgDiv=el('div',{id:'co4msg',css:'font-size:13px;color:var(--txt3);min-height:20px;transition:opacity .5s;'});
   msgDiv.textContent=CO_MSGS[co.msgIdx||0];scr.appendChild(msgDiv);
   page.appendChild(scr);
+  // Сразу проверяем state — вдруг реквизиты уже пришли пока не было WebApp
+  const existingState=getLocalOrderState(co.orderId);
+  if(existingState){
+    if(existingState.payState==='requisites_sent'&&co.step===4){
+      co.payBank=BANKS.find(b=>b.id===existingState.payBankId)||BANKS.find(b=>b.name===existingState.payBank)||BANKS[0];
+      co.payPhone=existingState.payPhone||'—';
+      co.payName=existingState.payName||'—';
+      co.step=5;saveCheckout(co);
+      // Убиваем старые таймеры если были
+      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
+      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
+      render();return;
+    }
+    if(existingState.payState==='cancelled'&&co.step===4){
+      co.payStatus='fail';co.step=7;
+      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
+      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
+      render();return;
+    }
+  }
+
   if(!co._msgTimer){
     co._msgTimer=setInterval(()=>{
       co.msgIdx=((co.msgIdx||0)+1)%CO_MSGS.length;
       const md=document.getElementById('co4msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CO_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
     },2000);
-    // localStorage polling — синхронный, мгновенный, 100% надёжный
-    co._pollTimer=setInterval(()=>{
+    // Гибридный polling: сначала localStorage (мгновенно), потом KV (между устройствами)
+    co._pollTimer=setInterval(async()=>{
       if(!S.checkout||S.checkout.orderId!==co.orderId){
         clearInterval(co._pollTimer);co._pollTimer=null;return;
       }
-      const ord=getLocalOrderState(co.orderId);
+      const ord=await getOrderState(co.orderId);
       if(!ord)return;
       if(ord.payState==='cancelled'){
         clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
@@ -1114,7 +1194,7 @@ function buildCO4(page){
         co.payName=ord.payName||'—';
         co.step=5;saveCheckout(co);render();
       }
-    },1000);
+    },2000);
   }
 }
 function buildCO5(page){

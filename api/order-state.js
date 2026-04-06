@@ -1,21 +1,18 @@
 /**
- * order-state.js
+ * order-state.js — централизованное хранилище состояний заказов через Vercel KV
  * 
- * Используется ТОЛЬКО для:
- * 1. Отправки TG уведомления пользователю с реквизитами (когда admin нажал "Отправить")
- * 2. Логирования событий
- *
- * Основное хранилище состояний — localStorage в браузере.
- * Polling между пользователем и администратором работает через localStorage.
+ * Теперь polling работает МЕЖДУ УСТРОЙСТВАМИ:
+ * Admin WebApp пишет → KV → User WebApp читает
  */
 
+const { dbGet, dbSet } = require('./db');
 const TOKEN = process.env.BOT_TOKEN || '';
 const WURL  = (process.env.WEBAPP_URL || '').replace(/\/+$/, '');
 const TG    = 'https://api.telegram.org/bot' + TOKEN;
 
 async function tg(method, body) {
   try {
-    const r = await fetch(TG + '/' + method, {
+    const r = await fetch(`${TG}/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -31,45 +28,46 @@ module.exports = async function(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end('{}');
 
   const { action, orderId, data } = req.body || {};
+  const key = orderId ? `order:${String(orderId)}` : null;
 
-  // Отправить реквизиты пользователю через TG бот
-  if (action === 'send_requisites' && orderId && data) {
-    const userTgId = data.userTgId;
-    if (!userTgId) {
-      return res.status(200).end(JSON.stringify({ ok: false, error: 'no userTgId' }));
-    }
+  // ── SET ─────────────────────────────────────────────────────────
+  if (action === 'set_order' && key) {
+    const existing = await dbGet(key) || {};
+    const merged = { ...existing, ...data, _ts: Date.now() };
+    await dbSet(key, merged, 60 * 60 * 24 * 7); // TTL 7 дней
 
-    const bankName = data.payBank  || 'Банк';
-    const payName  = data.payName  || '—';
-    const payPhone = data.payPhone || '—';
-    const bankId   = data.payBankId || 'sber';
-
-    // Кодируем реквизиты в base64 для URL параметра
-    let param = '';
-    try {
-      const obj = { t:'req', oid: String(orderId), bank: bankName, name: payName, phone: payPhone, bankId };
-      param = Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-      if (param.length > 64) param = param.slice(0, 64);
-    } catch(e) {}
-
-    const result = await tg('sendMessage', {
-      chat_id: userTgId,
-      parse_mode: 'HTML',
-      text:
-        '💳 <b>Реквизиты по заказу №' + orderId + ' готовы!</b>\n\n' +
-        '🏦 ' + bankName + '\n' +
-        '👤 ' + payName + '\n' +
-        '📞 <code>' + payPhone + '</code>\n\n' +
-        'Нажмите кнопку ниже чтобы перейти к оплате:',
-      reply_markup: {
-        inline_keyboard: [[{
+    // Если отправляются реквизиты — уведомляем пользователя
+    if (data?.payState === 'requisites_sent' && data?.userTgId) {
+      const bank = data.payBank || 'Банк';
+      const name = data.payName || '—';
+      const phone = data.payPhone || '—';
+      const bid = data.payBankId || 'sber';
+      let param = '';
+      try {
+        param = Buffer.from(JSON.stringify({
+          t:'req', oid: String(orderId), bank, name, phone, bankId: bid
+        })).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'').slice(0,64);
+      } catch(e) {}
+      await tg('sendMessage', {
+        chat_id: data.userTgId,
+        parse_mode: 'HTML',
+        text: `💳 <b>Реквизиты по заказу №${orderId} готовы!</b>\n\n🏦 ${bank}\n👤 ${name}\n📞 <code>${phone}</code>\n\nНажмите кнопку ниже:`,
+        reply_markup: { inline_keyboard: [[{
           text: '💳 Перейти к оплате',
           web_app: { url: WURL + (param ? '?req=' + param : '') }
-        }]]
-      }
-    });
+        }]]}
+      });
+    }
+    return res.status(200).end(JSON.stringify({ ok: true, state: merged }));
+  }
 
-    return res.status(200).end(JSON.stringify({ ok: result.ok, msgId: result.result?.message_id }));
+  // ── GET ─────────────────────────────────────────────────────────
+  if (action === 'get_order' && key) {
+    const state = await dbGet(key);
+    return res.status(200).end(JSON.stringify({
+      ok: true,
+      state: state || { payState: 'waiting_requisites' }
+    }));
   }
 
   return res.status(200).end(JSON.stringify({ ok: true }));

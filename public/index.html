@@ -974,74 +974,236 @@ function coHdr(title,onBack){
   return h;
 }
 
-// Шаг 0 — выбор времени доставки
+// Шаг 0 — выбор времени доставки (карусель)
 function buildCO0(page){
   const co=S.checkout;
   page.appendChild(coHdr('Доставка',()=>{co._tempAddr=null;S.checkout=null;S.cartOpen=true;render();}));
-  const scr=el('div',{cls:'scroll',css:'padding:16px 14px 100px;'});
-  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:6px;'},['Когда доставить?']));
-  scr.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:18px;'},['Московское время · Минимум через 2 часа']));
 
-  // Считаем доступные слоты (МСК = UTC+3)
-  const nowUTC=Date.now();
-  const mskOffset=3*60*60*1000;
-  const nowMsk=new Date(nowUTC+mskOffset);
-  const mskHour=nowMsk.getUTCHours();
-  const mskMin=nowMsk.getUTCMinutes();
-  const minHour=mskHour+(mskMin>0?1:0)+2; // +2 часа минимум
+  const scr=el('div',{cls:'scroll',css:'padding:0 0 100px;'});
 
-  const slots=[];
-  // "Как можно быстрее" — всегда первый
-  slots.push({id:'asap',label:'Как можно быстрее',sub:'~2 ч'});
-  for(let h=9;h<=20;h++){
-    if(h+1<=minHour)continue; // уже прошедшие слоты
-    if(h>=21)break;
-    slots.push({id:h+':00',label:h+':00 – '+(h+1)+':00',sub:''});
+  // ── Функция получения слотов для конкретной даты ──
+  function getSlotsForDate(dateMs){
+    const mskOffset=3*60*60*1000;
+    const nowMsk=new Date(Date.now()+mskOffset);
+    const dateMsk=new Date(dateMs+mskOffset);
+    const isToday=nowMsk.toISOString().slice(0,10)===dateMsk.toISOString().slice(0,10);
+    const minHour=isToday?(nowMsk.getUTCHours()+(nowMsk.getUTCMinutes()>0?1:0)+2):9;
+    const slots=[];
+    if(isToday)slots.push({id:'asap_'+dateMs,label:'Как можно быстрее',sub:'~2 ч',date:dateMs});
+    for(let h=9;h<=20;h++){
+      if(h<minHour)continue;
+      slots.push({id:h+':00_'+dateMs,label:h+':00 – '+(h+1)+':00',sub:'',date:dateMs,hour:h});
+    }
+    return slots;
   }
 
-  if(slots.length<=1){
-    scr.appendChild(el('div',{css:'text-align:center;padding:30px;color:var(--txt3);font-size:14px;'},
-      ['Сегодня мы уже не принимаем заказы.\nПожалуйста, свяжитесь с нами.']));
-    page.appendChild(scr);return;
+  // ── Генерируем дни (сегодня + 6 дней вперёд) ──────
+  const mskNow=Date.now()+3*60*60*1000;
+  const todayMsk=new Date(mskNow);
+  todayMsk.setUTCHours(0,0,0,0);
+
+  const days=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(todayMsk.getTime()+i*86400000);
+    days.push({ms:d.getTime(), date:d});
   }
 
-  const grid=el('div',{css:'display:flex;flex-wrap:wrap;gap:10px;'});
-  slots.forEach(slot=>{
-    const sel=co.timeSlot===slot.id;
-    const btn=el('div',{
-      css:'padding:12px 16px;border-radius:14px;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.12)')+';background:'+(sel?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)')+';cursor:pointer;transition:all .2s;min-width:140px;flex:1;text-align:center;',
-      id:'slot_'+slot.id
-    });
-    btn.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:'+(sel?'var(--accent)':'var(--txt)')+';'},[slot.label]));
-    if(slot.sub)btn.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin-top:3px;'},[slot.sub]));
-    btn.addEventListener('click',()=>{
-      co.timeSlot=slot.id;
-      // Обновляем все кнопки без render()
-      grid.querySelectorAll('[id^="slot_"]').forEach(b=>{
-        const s=b.id.replace('slot_','');
-        const active=s===slot.id;
-        b.style.borderColor=active?'var(--accent)':'rgba(255,255,255,.12)';
-        b.style.background=active?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)';
-        b.querySelector('div').style.color=active?'var(--accent)':'var(--txt)';
+  // ── Состояние ──────────────────────────────────────
+  let selectedDayIdx=0;
+  let calendarOpen=false;
+
+  const RU_DAYS=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const RU_MONTHS=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+  function dayLabel(d,idx){
+    const weekday=RU_DAYS[d.getUTCDay()];
+    const dm=d.getUTCDate()+' '+RU_MONTHS[d.getUTCMonth()];
+    if(idx===0)return 'Сегодня, '+weekday+', '+dm;
+    if(idx===1)return 'Завтра, '+weekday+', '+dm;
+    return weekday+', '+dm;
+  }
+
+  // ── Контейнер заголовка дня ────────────────────────
+  const dateLabel=document.createElement('div');
+  dateLabel.style.cssText='font-size:17px;font-weight:800;text-align:center;padding:18px 16px 4px;';
+
+  // ── Карусель слотов ────────────────────────────────
+  const carousel=document.createElement('div');
+  carousel.style.cssText='overflow-x:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 8px;scroll-snap-type:x mandatory;display:flex;gap:10px;scrollbar-width:none;';
+  carousel.style['-ms-overflow-style']='none';
+
+  const continueBtn=document.createElement('button');
+  continueBtn.className='btn-prim';
+  continueBtn.id='co0-continue';
+  continueBtn.textContent='Продолжить →';
+  continueBtn.disabled=true;
+  continueBtn.style.opacity='0.4';
+
+  function renderSlots(){
+    const d=days[selectedDayIdx];
+    dateLabel.textContent=dayLabel(d.date,selectedDayIdx);
+    carousel.innerHTML='';
+    const slots=getSlotsForDate(d.ms);
+
+    if(slots.length===0){
+      const empty=document.createElement('div');
+      empty.style.cssText='padding:20px 16px;color:var(--txt3);font-size:14px;';
+      empty.textContent='На этот день нет доступных слотов';
+      carousel.appendChild(empty);
+      return;
+    }
+
+    slots.forEach(slot=>{
+      const sel=co.timeSlot===slot.id;
+      const btn=document.createElement('div');
+      btn.style.cssText='flex-shrink:0;scroll-snap-align:start;padding:14px 18px;border-radius:16px;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.12)')+';background:'+(sel?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)')+';cursor:pointer;transition:all .2s;text-align:center;min-width:130px;';
+      btn.dataset.slotId=slot.id;
+
+      const lbl=document.createElement('div');
+      lbl.style.cssText='font-size:14px;font-weight:700;color:'+(sel?'var(--accent)':'var(--txt)')+';';
+      lbl.textContent=slot.label;
+      btn.appendChild(lbl);
+
+      if(slot.sub){
+        const sub=document.createElement('div');
+        sub.style.cssText='font-size:11px;color:var(--txt3);margin-top:3px;';
+        sub.textContent=slot.sub;
+        btn.appendChild(sub);
+      }
+
+      btn.addEventListener('click',()=>{
+        co.timeSlot=slot.id;
+        co.timeSlotLabel=slot.label;
+        co.timeSlotDate=d.date.toLocaleDateString('ru',{day:'numeric',month:'long'});
+        // Обновляем стили без ре-рендера
+        carousel.querySelectorAll('[data-slot-id]').forEach(b=>{
+          const active=b.dataset.slotId===slot.id;
+          b.style.borderColor=active?'var(--accent)':'rgba(255,255,255,.12)';
+          b.style.background=active?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)';
+          b.querySelector('div').style.color=active?'var(--accent)':'var(--txt)';
+        });
+        continueBtn.disabled=false;
+        continueBtn.style.opacity='1';
       });
-      // Активируем кнопку продолжить
-      const continueBtn=document.getElementById('co0-continue');
-      if(continueBtn){continueBtn.disabled=false;continueBtn.style.opacity='1';}
+
+      carousel.appendChild(btn);
     });
-    grid.appendChild(btn);
+  }
+
+  // ── Навигация по дням (стрелки) ───────────────────
+  const navRow=document.createElement('div');
+  navRow.style.cssText='display:flex;align-items:center;justify-content:center;gap:12px;padding:0 16px 6px;';
+
+  const prevBtn=document.createElement('button');
+  prevBtn.style.cssText='background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:50%;width:36px;height:36px;color:var(--txt2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+  prevBtn.textContent='‹';
+  prevBtn.addEventListener('click',()=>{if(selectedDayIdx>0){selectedDayIdx--;renderSlots();}});
+
+  const nextBtn=prevBtn.cloneNode(false);
+  nextBtn.textContent='›';
+  nextBtn.addEventListener('click',()=>{if(selectedDayIdx<days.length-1){selectedDayIdx++;renderSlots();}});
+
+  navRow.appendChild(prevBtn);
+  navRow.appendChild(dateLabel);
+  navRow.appendChild(nextBtn);
+
+  // ── Кнопка выбора даты ────────────────────────────
+  const chooseDateBtn=document.createElement('button');
+  chooseDateBtn.style.cssText='display:block;margin:4px auto 0;background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:6px 12px;';
+  chooseDateBtn.textContent='📅 Выбрать дату';
+
+  // ── Календарь ─────────────────────────────────────
+  const calOverlay=document.createElement('div');
+  calOverlay.style.cssText='position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:none;align-items:flex-end;justify-content:center;';
+
+  const calSheet=document.createElement('div');
+  calSheet.style.cssText='background:rgba(12,12,24,.98);border-radius:24px 24px 0 0;border-top:0.5px solid rgba(255,255,255,.15);padding:20px 20px calc(20px + var(--safe-b));width:100%;max-width:420px;animation:slideUp .3s cubic-bezier(.32,.72,0,1);';
+
+  calSheet.innerHTML='<div style="width:36px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 16px;"></div><div style="font-size:17px;font-weight:800;text-align:center;margin-bottom:14px;">Выберите дату</div>';
+
+  const calGrid=document.createElement('div');
+  calGrid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px;';
+  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{
+    const hd=document.createElement('div');
+    hd.style.cssText='text-align:center;font-size:11px;font-weight:700;color:var(--txt3);padding:4px 0;';
+    hd.textContent=h;
+    calGrid.appendChild(hd);
   });
-  scr.appendChild(grid);
+
+  let calSelectedIdx=selectedDayIdx;
+  const calBtns=[];
+
+  days.forEach((d,di)=>{
+    const dayOfWeek=(d.date.getUTCDay()+6)%7; // Пн=0
+    if(di===0){
+      for(let g=0;g<dayOfWeek;g++){
+        const empty=document.createElement('div');calGrid.appendChild(empty);
+      }
+    }
+    const btn=document.createElement('button');
+    btn.style.cssText='padding:10px 4px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:14px;font-weight:700;color:var(--txt);cursor:pointer;transition:all .2s;';
+    btn.textContent=d.date.getUTCDate();
+    calBtns.push(btn);
+
+    btn.addEventListener('click',()=>{
+      calSelectedIdx=di;
+      calBtns.forEach((b,bi)=>{
+        b.style.borderColor=bi===di?'var(--accent)':'rgba(255,255,255,.1)';
+        b.style.background=bi===di?'rgba(191,90,242,.15)':'rgba(255,255,255,.04)';
+        b.style.color=bi===di?'var(--accent)':'var(--txt)';
+      });
+    });
+    calGrid.appendChild(btn);
+  });
+
+  // Подсвечиваем текущий выбор
+  if(calBtns[calSelectedIdx]){
+    calBtns[calSelectedIdx].style.borderColor='var(--accent)';
+    calBtns[calSelectedIdx].style.background='rgba(191,90,242,.15)';
+    calBtns[calSelectedIdx].style.color='var(--accent)';
+  }
+
+  const calConfirm=document.createElement('button');
+  calConfirm.className='btn-prim';
+  calConfirm.textContent='Применить';
+  calConfirm.addEventListener('click',()=>{
+    selectedDayIdx=calSelectedIdx;
+    calOverlay.style.display='none';
+    renderSlots();
+  });
+
+  calSheet.appendChild(calGrid);
+  calSheet.appendChild(calConfirm);
+  calOverlay.appendChild(calSheet);
+  calOverlay.addEventListener('click',(e)=>{if(e.target===calOverlay)calOverlay.style.display='none';});
+
+  chooseDateBtn.addEventListener('click',()=>{
+    calSelectedIdx=selectedDayIdx;
+    calBtns.forEach((b,bi)=>{
+      b.style.borderColor=bi===selectedDayIdx?'var(--accent)':'rgba(255,255,255,.1)';
+      b.style.background=bi===selectedDayIdx?'rgba(191,90,242,.15)':'rgba(255,255,255,.04)';
+      b.style.color=bi===selectedDayIdx?'var(--accent)':'var(--txt)';
+    });
+    calOverlay.style.display='flex';
+  });
+
+  // ── Собираем страницу ─────────────────────────────
+  scr.appendChild(navRow);
+  scr.appendChild(carousel);
+  scr.appendChild(chooseDateBtn);
+  renderSlots();
+
   page.appendChild(scr);
+  page.appendChild(calOverlay);
 
-  const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const b=el('button',{id:'co0-continue',cls:'btn-prim',
-    onClick:()=>{if(co.timeSlot){co.step=1;render();}}});
-  b.textContent='Продолжить →';
-  b.disabled=!co.timeSlot;
-  b.style.opacity=co.timeSlot?'1':'0.4';
-  foot.appendChild(b);page.appendChild(foot);
+  continueBtn.addEventListener('click',()=>{if(co.timeSlot){co.step=1;render();}});
+  if(co.timeSlot){continueBtn.disabled=false;continueBtn.style.opacity='1';}
+
+  const foot=document.createElement('div');
+  foot.style.cssText='padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);';
+  foot.appendChild(continueBtn);
+  page.appendChild(foot);
 }
-
 
 function buildCO1(page){
   const co=S.checkout;
@@ -1194,6 +1356,8 @@ function buildCO3(page){
 }
 function buildCO4(page){
   const co=S.checkout;
+
+  // ── Создаём заказ один раз ─────────────────────────
   if(!co.orderId){
     const addrs=(S.user&&S.user.addresses)||[];
     const addr=co._tempAddr||addrs[co.addrIdx]||{};
@@ -1214,72 +1378,74 @@ function buildCO4(page){
     if(co.disc>0&&S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
     co.orderId=order.id;
     addLog('Создан заказ №'+order.id,'Сумма: '+order.total+' ₽');
-    // СИНХРОННО сохраняем в localStorage
-    setLocalOrderState(order.id, order);
+    setLocalOrderState(order.id,order);
     save();
-    // Сохраняем checkout для восстановления
     saveCheckout(co);
-    // Уведомление в TG бот (fire-and-forget)
     notifyAdmin({action:'new_order',orderData:{
-      id:order.id,total:order.total,
+      id:order.id,total:order.total,timeSlot:order.timeSlot,
       userName:order.userName,userPhone:order.userPhone,
       items:order.items,address:order.address
     }});
   }
+
+  // ── СРАЗУ проверяем — вдруг реквизиты уже есть ───────
+  const checkImmediate=()=>{
+    const st=getLocalOrderState(co.orderId);
+    if(!st)return false;
+    if(st.payState==='cancelled'){
+      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
+      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
+      co.payStatus='fail';co.step=7;render();return true;
+    }
+    if(st.payState==='requisites_sent'){
+      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
+      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
+      co.payBank=BANKS.find(b=>b.id===st.payBankId)||BANKS.find(b=>b.name===st.payBank)||BANKS[0];
+      co.payPhone=st.payPhone||'—';
+      co.payName=st.payName||'—';
+      co.step=5;saveCheckout(co);render();return true;
+    }
+    return false;
+  };
+
+  if(checkImmediate())return;
+
+  // ── Рисуем страницу ───────────────────────────────────
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
   scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:30px;'},['Готовим реквизиты']));
-  scr.appendChild(el('div',{cls:'spinner',css:'margin:0 auto 30px;'}));
-  const msgDiv=el('div',{id:'co4msg',css:'font-size:13px;color:var(--txt3);min-height:20px;transition:opacity .5s;'});
+  const spinEl=document.createElement('div');spinEl.className='spinner';spinEl.style.margin='0 auto 30px';scr.appendChild(spinEl);
+  const msgDiv=document.createElement('div');msgDiv.id='co4msg';msgDiv.style.cssText='font-size:13px;color:var(--txt3);min-height:20px;transition:opacity .5s;';
   msgDiv.textContent=CO_MSGS[co.msgIdx||0];scr.appendChild(msgDiv);
   page.appendChild(scr);
-  // Сразу проверяем state — вдруг реквизиты уже пришли пока не было WebApp
-  const existingState=getLocalOrderState(co.orderId);
-  if(existingState){
-    if(existingState.payState==='requisites_sent'&&co.step===4){
-      co.payBank=BANKS.find(b=>b.id===existingState.payBankId)||BANKS.find(b=>b.name===existingState.payBank)||BANKS[0];
-      co.payPhone=existingState.payPhone||'—';
-      co.payName=existingState.payName||'—';
-      co.step=5;saveCheckout(co);
-      // Убиваем старые таймеры если были
-      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
-      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      render();return;
-    }
-    if(existingState.payState==='cancelled'&&co.step===4){
-      co.payStatus='fail';co.step=7;
-      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
-      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      render();return;
-    }
-  }
 
+  // ── Запускаем таймеры только если не запущены ──────
   if(!co._msgTimer){
     co._msgTimer=setInterval(()=>{
       co.msgIdx=((co.msgIdx||0)+1)%CO_MSGS.length;
       const md=document.getElementById('co4msg');
       if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CO_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
     },2000);
-    // Гибридный polling: сначала localStorage (мгновенно), потом KV (между устройствами)
+  }
+
+  if(!co._pollTimer){
     co._pollTimer=setInterval(async()=>{
-      if(!S.checkout||S.checkout.orderId!==co.orderId){
-        clearInterval(co._pollTimer);co._pollTimer=null;return;
-      }
-      const ord=await getOrderState(co.orderId);
-      if(!ord)return;
-      if(ord.payState==='cancelled'){
-        clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
-        co.payStatus='fail';co.step=7;render();return;
-      }
-      if(ord.payState==='requisites_sent'){
-        clearInterval(co._pollTimer);clearInterval(co._msgTimer);co._pollTimer=null;co._msgTimer=null;
-        co.payBank=BANKS.find(b=>b.id===ord.payBankId)||BANKS.find(b=>b.name===ord.payBank)||BANKS[0];
-        co.payPhone=ord.payPhone||'—';
-        co.payName=ord.payName||'—';
-        co.step=5;saveCheckout(co);render();
-      }
+      // Сначала localStorage (мгновенно)
+      if(checkImmediate()){clearInterval(co._pollTimer);co._pollTimer=null;return;}
+      // Затем сервер KV (между устройствами)
+      try{
+        const r=await fetch('/api/order-state',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'get_order',orderId:String(co.orderId)})});
+        const d=await r.json();
+        if(d.state&&d.state.payState&&d.state.payState!=='waiting_requisites'){
+          setLocalOrderState(co.orderId,d.state);
+          checkImmediate();
+        }
+      }catch(e){}
     },2000);
   }
 }
+
 function buildCO5(page){
   const co=S.checkout;
   if(!co._deadline)co._deadline=Date.now()+5*60*1000;
@@ -1663,7 +1829,7 @@ function buildProfSec(){
 
   else if(k==='referral'){
     scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['🎫 Промокод']));
-    if(!S.user.promoCode){S.user.promoCode='VNT'+Math.random().toString(36).slice(2,8).toUpperCase();save();}
+    if(!S.user.promoCode){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];S.user.promoCode=r;save();}
     scr.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:16px;'},['Поделитесь своим промокодом с друзьями!\nОни получат 1000 лепестков, вы — 🌹 бутоны.']));
     const code=el('div',{css:'background:rgba(191,90,242,.1);border:1.5px solid rgba(191,90,242,.4);border-radius:20px;padding:24px;text-align:center;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(191,90,242,.2);'});
     code.innerHTML='<div style="font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:10px;letter-spacing:.5px;">ВАШ ПРОМОКОД</div><div style="font-size:32px;font-weight:900;letter-spacing:6px;color:var(--accent);">'+S.user.promoCode+'</div>';
@@ -1897,7 +2063,7 @@ function obAddr(){
   inp.addEventListener('input',()=>{
     clearTimeout(timer);sendB.style.display='none';inp.classList.remove('valid');
     if(!inp.value)return;
-    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},1500);
+    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},800);
   });
   wrap.appendChild(inp);wrap.appendChild(sendB);d.appendChild(wrap);
   return d;
@@ -1923,13 +2089,13 @@ function obPromo(){
   const d=obWrap([]);
   d.appendChild(el('div',{cls:'ob-emoji'},['🎫']));
   d.appendChild(el('div',{cls:'ob-title'},['Промокод']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:24px;'},['Если у вас есть промокод\nвведите его ниже']));
+  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:24px;'},['Если у вас есть промокод,\nвведите его ниже']));
 
   let promoError=false;
   const boxes=[];
 
   const cont=el('button',{cls:'btn-prim',css:'width:100%;margin-top:20px;display:none;',
-    onClick:async()=>{
+    onClick:()=>{
       const code=boxes.map(b=>b.value.toUpperCase()).join('');
       const promo=VALID_PROMOS[code];
       if(promo){
@@ -1937,8 +2103,10 @@ function obPromo(){
         S.obPromoBonus=promo.bonus;
         S.obStep=6;render();
       }else{
-        // Красная подсветка
-        boxes.forEach(b=>{b.style.borderColor='var(--pink)';b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';});
+        boxes.forEach(b=>{
+          b.style.borderColor='var(--pink)';
+          b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';
+        });
         promoError=true;
         showNotif('Такого промокода нет :(','❌');
       }
@@ -1946,38 +2114,66 @@ function obPromo(){
   cont.textContent='Применить →';
 
   const row=el('div',{css:'display:flex;gap:8px;justify-content:center;align-items:center;'});
+
   for(let i=0;i<5;i++){
-    const box=el('input',{
-      css:'width:48px;height:56px;border-radius:12px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:20px;font-weight:800;text-align:center;color:var(--txt);outline:none;text-transform:uppercase;-webkit-appearance:none;transition:border-color .2s,box-shadow .2s;',
-      maxlength:'1',inputmode:'text'
-    });
-    boxes.push(box);row.appendChild(box);
-    box.addEventListener('input',()=>{
-      // Только латиница и цифры
-      box.value=box.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,1);
-      // Сброс красного при вводе
-      if(promoError){
-        promoError=false;
-        boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});
-        boxes.forEach(b=>{if(b.value)b.style.borderColor='var(--green)';});
-      }
-      if(box.value){
-        box.style.borderColor='var(--green)';
-        box.style.boxShadow='0 0 0 2px rgba(48,209,88,.2)';
-      }else{
-        box.style.borderColor='rgba(255,255,255,.2)';
-        box.style.boxShadow='none';
-      }
-      if(box.value&&i<4)boxes[i+1].focus();
-      const filled=boxes.filter(b=>b.value).length===5;
-      cont.style.display=filled?'block':'none';
-    });
+    const idx=i;
+    const box=document.createElement('input');
+    box.maxLength=1;
+    box.setAttribute('inputmode','text');
+    box.setAttribute('autocomplete','off');
+    box.style.cssText='width:52px;height:60px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:22px;font-weight:800;text-align:center;color:var(--txt);outline:none;text-transform:uppercase;-webkit-appearance:none;transition:border-color .2s,box-shadow .2s;';
+    boxes.push(box);
+    row.appendChild(box);
+
+    function refreshStyles(){
+      if(promoError) return;
+      boxes.forEach(b=>{
+        if(b.value){
+          b.style.borderColor='var(--green)';
+          b.style.boxShadow='0 0 0 2px rgba(48,209,88,.2)';
+        }else{
+          b.style.borderColor='rgba(255,255,255,.2)';
+          b.style.boxShadow='none';
+        }
+      });
+      cont.style.display=boxes.every(b=>b.value)?'block':'none';
+    }
+
     box.addEventListener('keydown',(e)=>{
-      if(e.key==='Backspace'&&!box.value&&i>0)boxes[i-1].focus();
+      // Backspace
+      if(e.key==='Backspace'){
+        if(!box.value&&idx>0){e.preventDefault();boxes[idx-1].focus();boxes[idx-1].value='';refreshStyles();}
+        else{setTimeout(refreshStyles,0);}
+        if(promoError){promoError=false;boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});}
+        return;
+      }
+      // Только латиница и цифры
+      if(!/^[a-zA-Z0-9]$/.test(e.key)&&e.key.length===1){e.preventDefault();return;}
+    });
+
+    box.addEventListener('input',(e)=>{
+      // Оставляем только разрешённые символы, верхний регистр
+      const clean=box.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
+      box.value=clean.slice(0,1);
+      if(promoError){promoError=false;boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});}
+      refreshStyles();
+      if(box.value&&idx<4)boxes[idx+1].focus();
+    });
+
+    box.addEventListener('paste',(e)=>{
+      e.preventDefault();
+      const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
+      for(let j=0;j<5&&idx+j<5;j++){
+        boxes[idx+j].value=text[j]||'';
+      }
+      refreshStyles();
+      const last=Math.min(idx+text.length,4);
+      boxes[last].focus();
     });
   }
 
-  d.appendChild(row);d.appendChild(cont);
+  d.appendChild(row);
+  d.appendChild(cont);
   const skip=el('button',{
     css:'width:100%;margin-top:14px;background:none;border:none;color:var(--txt2);font-size:15px;cursor:pointer;padding:10px;',
     onClick:()=>{S.obPromo='';S.obPromoSkipped=true;S.obStep=6;render();}});
@@ -2017,7 +2213,7 @@ function obRoulette(){
     const pr=el('div',{css:'background:rgba(48,209,88,.1);border:1.5px solid var(--green);border-radius:24px;padding:28px;text-align:center;margin:0 0 20px;box-shadow:inset 0 1px 0 rgba(48,209,88,.2),0 8px 32px rgba(48,209,88,.15);width:100%;'});
     pr.innerHTML='<div style="font-size:44px;margin-bottom:8px;">🎉</div><div style="font-size:14px;color:var(--txt2);margin-bottom:6px;font-weight:600;">Твоя скидка:</div><div style="font-size:48px;font-weight:900;color:var(--green);">'+S.spinResult.l+'</div><div style="font-size:13px;color:var(--txt2);margin-top:6px;">☘️ +'+S.spinResult.v+' лепестков начислено</div>';
     d.appendChild(pr);
-    const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=6;render();}});b.textContent='Круто, спасибо! 🎊';d.appendChild(b);return d;
+    const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=7;render();}});b.textContent='Круто, спасибо! 🎊';d.appendChild(b);return d;
   }
   const repeated=[...ROUL_ITEMS,...ROUL_ITEMS,...ROUL_ITEMS,...ROUL_ITEMS];
   const outer=el('div',{cls:'roul-outer',css:'width:100%;'});
@@ -2135,7 +2331,7 @@ function buildExchangeForm(){
 
   let fromCur='buds';
   let toCur='petals';
-  const RATES={'buds->petals':3,'buds->rubles':0.5}; // 1 бутон = 3 лепестка; 2 бутона = 1 руб
+  const RATES={'buds->petals':1/3,'buds->rubles':0.5}; // 3 бутона = 1 лепесток; 2 бутона = 1 руб
 
   const fromInput=el('input',{
     css:'width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,55,95,.6);border-radius:16px;padding:14px 16px;font-size:18px;font-weight:700;color:var(--txt);outline:none;',
@@ -2194,9 +2390,9 @@ function buildExchangeForm(){
 
   function updateResult(){
     const val=parseFloat(fromInput.value)||0;
-    const rate=fromCur==='buds'&&toCur==='petals'?3:(fromCur==='buds'&&toCur==='rubles'?0.5:0);
+    const rate=fromCur==='buds'&&toCur==='petals'?(1/3):(fromCur==='buds'&&toCur==='rubles'?0.5:0);
     const result=val*rate;
-    toInput.value=result>0?result.toLocaleString('ru'):'0';
+    toInput.value=result>0?Math.floor(result).toLocaleString('ru'):'0';
     const unit=toCur==='petals'?'☘️ лепестков':toCur==='rubles'?'₽ рублей':'';
     resultLabel.textContent=result>0?'Получите: '+result.toLocaleString('ru')+' '+unit:'';
     const avail=S.user?(fromCur==='buds'?(S.user.buds||0):0):0;
@@ -2212,8 +2408,8 @@ function buildExchangeForm(){
       if(!val||!S.user)return;
       const avail=fromCur==='buds'?(S.user.buds||0):0;
       if(val>avail){showNotif('Недостаточно бутонов','⚠️');return;}
-      const rate=fromCur==='buds'&&toCur==='petals'?3:(fromCur==='buds'&&toCur==='rubles'?0.5:0);
-      const gained=val*rate;
+      const rate=fromCur==='buds'&&toCur==='petals'?(1/3):(fromCur==='buds'&&toCur==='rubles'?0.5:0);
+      const gained=Math.floor(val*rate);
       if(fromCur==='buds')S.user.buds-=val;
       if(toCur==='petals')S.user.petals=(S.user.petals||0)+gained;
       if(toCur==='rubles')S.user.rubles=(S.user.rubles||0)+gained;
@@ -2270,7 +2466,7 @@ function obExchange(){
   d.appendChild(el('div',{cls:'ob-title'},['Система обмена']));
   d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Бутоны можно обменять\nна лепестки или рубли']));
   const qs=el('div',{cls:'list-sec',css:'width:100%;margin-bottom:22px;'});
-  [['🌹 → ☘️ Бутоны в лепестки','Курс 1:3 — 1 бутон = 3 лепестка'],
+  [['🌹 → ☘️ Бутоны в лепестки','Курс 3:1 — 3 бутона = 1 лепесток'],
    ['🌹 → 💰 Бутоны в рубли','Курс 2:1 — 2 бутона = 1 рубль\nВывод через СБП']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
   d.appendChild(qs);
   const b=el('button',{cls:'btn-prim',css:'width:100%;',onClick:()=>{
@@ -2281,7 +2477,7 @@ function obExchange(){
       addr:S.obAddr||'',floor:S.obFloor,apt:S.obApt,entr:S.obEntr,intercom:S.obIntercom,
       petals:1000+promoBonus+spinBonus,buds:0,rubles:0,referred:0,
       refCode:'VNT'+Math.random().toString(36).slice(2,8).toUpperCase(),
-      promoCode:'VNT'+Math.random().toString(36).slice(2,8).toUpperCase(),
+      promoCode:(()=>{const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];return r;})(),
       addresses:[{street:S.obAddr||'',intercom:S.obIntercom||'',entr:S.obEntr||'',floor:S.obFloor||'',apt:S.obApt||'',note:'',expanded:false}]
     };
     S.onboard=false;save();showNotif('Добро пожаловать, '+S.user.name+'! 🌸');render();
@@ -2345,9 +2541,10 @@ function buildAdmin(){
 }
 
 function buildAdminDash(scr){
-  const rev=S.orders.reduce((a,o)=>a+o.total,0);
+  const completedOrders=S.orders.filter(o=>!['Отменён','ОТМЕНЁН','cancelled'].includes(o.status)&&o.payState!=='cancelled');
+  const rev=completedOrders.reduce((a,o)=>a+o.total,0);
   const grid=el('div',{css:'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;'});
-  [['💰',rev.toLocaleString('ru')+' ₽','Выручка','var(--green)'],['📦',S.orders.length,'Заказов','var(--blue)'],['👥',S.user?1:0,'Клиентов','var(--accent)'],['🌸',FLOWERS.length+GIFTS.length,'Товаров','var(--gold)']].forEach(([ic,v,lb,c])=>{
+  [['💰',rev.toLocaleString('ru')+' ₽','Выручка','var(--green)'],['📦',completedOrders.length+'/'+S.orders.length,'Заказов','var(--blue)'],['👥',S.user?1:0,'Клиентов','var(--accent)'],['🌸',FLOWERS.length+GIFTS.length,'Товаров','var(--gold)']].forEach(([ic,v,lb,c])=>{
     const card=el('div',{css:'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:16px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);'});
     card.innerHTML='<div style="font-size:26px;margin-bottom:5px;">'+ic+'</div><div style="font-size:20px;font-weight:800;color:'+c+';">'+v+'</div><div style="font-size:12px;color:var(--txt2);font-weight:600;">'+lb+'</div>';
     grid.appendChild(card);

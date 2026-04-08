@@ -355,13 +355,23 @@ const ORDER_COLORS={'Заказ создан':['#4ab5ff','rgba(74,181,255,.15)']
 const LOGS=[];
 function addLog(action,detail){LOGS.unshift({ts:new Date().toLocaleString('ru'),action,detail,admin:'AdminAdmin'});}
 
+// ══ ПРОМОКОДЫ ══
+const VALID_PROMOS = {
+  'VFLWR': {bonus:1000, desc:'Приветственный бонус'},
+  'VIP01': {bonus:2000, desc:'VIP промокод'},
+  'LOVE5': {bonus:500,  desc:'Подарок'},
+  'GIFT7': {bonus:750,  desc:'Специальное предложение'},
+  'TEST1': {bonus:100,  desc:'Тестовый промокод'},
+};
+
+
 // ══════════════════════════════════════════
 // СОСТОЯНИЕ
 // ══════════════════════════════════════════
 let S = {
   tab:0, user:null, cart:{}, orders:[],
   onboard:false, obStep:0,
-  obPhone:'',obAddr:'',obFloor:'',obApt:'',obEntr:'',obIntercom:'',obNote:'',obName:'',
+  obPhone:'',obAddr:'',obFloor:'',obApt:'',obEntr:'',obIntercom:'',obNote:'',obName:'',obPromo:'',obPromoSkipped:false,
   spinResult:null, spun:false,
   filterOpen:false, sortOpen:false, sortBy:'popular',
   ff:{types:[],minH:50,maxH:100,minP:0,maxP:8000},
@@ -468,7 +478,7 @@ function saveCheckout(co){
   try{
     // Сохраняем только сериализуемые поля (без таймеров)
     const safe={
-      step:co.step, orderId:co.orderId, total:co.total, disc:co.disc||0,
+      step:co.step, orderId:co.orderId, total:co.total, disc:co.disc||0, timeSlot:co.timeSlot||null,
       receiver:co.receiver, otherName:co.otherName||'', otherPhone:co.otherPhone||'',
       addrIdx:co.addrIdx||0, payStatus:co.payStatus,
       payBankId:co.payBank?.id||null, payBankName:co.payBank?.name||null,
@@ -488,6 +498,7 @@ function loadCheckout(){
     const d=JSON.parse(s);
     if(!d||!d.orderId)return null;
     // Восстанавливаем объект bank из id/name
+    // timeSlot уже в d
     if(d.payBankId||d.payBankName){
       d.payBank=BANKS.find(b=>b.id===d.payBankId)||BANKS.find(b=>b.name===d.payBankName)||null;
     }
@@ -931,7 +942,7 @@ function buildCart(){
     sum.appendChild(tr);
     const ob=el('button',{cls:'btn-prim',onClick:()=>{
       if(!S.user){showNotif('Войдите в аккаунт','⚠️');return;}
-      S.checkout={step:1,addrIdx:0,receiver:'',otherName:'',otherPhone:'',disc,total:total-disc,orderId:null,payStatus:null,msgIdx:0,_paidEnabled:false};
+      S.checkout={step:0,timeSlot:null,addrIdx:0,receiver:'',otherName:'',otherPhone:'',disc,total:total-disc,orderId:null,payStatus:null,msgIdx:0,_paidEnabled:false};
       S.cartOpen=false;render();
     }});
     ob.textContent='Оформить заказ 🌸';sum.appendChild(ob);sh.appendChild(sum);
@@ -945,7 +956,8 @@ function buildCart(){
 function buildCheckout(){
   const co=S.checkout;
   const page=el('div',{cls:'co-page'});
-  if(co.step===1)buildCO1(page);
+  if(co.step===0)buildCO0(page);
+  else if(co.step===1)buildCO1(page);
   else if(co.step===2)buildCO2(page);
   else if(co.step===3)buildCO3(page);
   else if(co.step===4)buildCO4(page);
@@ -961,6 +973,76 @@ function coHdr(title,onBack){
   if(onBack)h.appendChild(el('div',{css:'width:70px;'}));
   return h;
 }
+
+// Шаг 0 — выбор времени доставки
+function buildCO0(page){
+  const co=S.checkout;
+  page.appendChild(coHdr('Доставка',()=>{co._tempAddr=null;S.checkout=null;S.cartOpen=true;render();}));
+  const scr=el('div',{cls:'scroll',css:'padding:16px 14px 100px;'});
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:6px;'},['Когда доставить?']));
+  scr.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:18px;'},['Московское время · Минимум через 2 часа']));
+
+  // Считаем доступные слоты (МСК = UTC+3)
+  const nowUTC=Date.now();
+  const mskOffset=3*60*60*1000;
+  const nowMsk=new Date(nowUTC+mskOffset);
+  const mskHour=nowMsk.getUTCHours();
+  const mskMin=nowMsk.getUTCMinutes();
+  const minHour=mskHour+(mskMin>0?1:0)+2; // +2 часа минимум
+
+  const slots=[];
+  // "Как можно быстрее" — всегда первый
+  slots.push({id:'asap',label:'Как можно быстрее',sub:'~2 ч'});
+  for(let h=9;h<=20;h++){
+    if(h+1<=minHour)continue; // уже прошедшие слоты
+    if(h>=21)break;
+    slots.push({id:h+':00',label:h+':00 – '+(h+1)+':00',sub:''});
+  }
+
+  if(slots.length<=1){
+    scr.appendChild(el('div',{css:'text-align:center;padding:30px;color:var(--txt3);font-size:14px;'},
+      ['Сегодня мы уже не принимаем заказы.\nПожалуйста, свяжитесь с нами.']));
+    page.appendChild(scr);return;
+  }
+
+  const grid=el('div',{css:'display:flex;flex-wrap:wrap;gap:10px;'});
+  slots.forEach(slot=>{
+    const sel=co.timeSlot===slot.id;
+    const btn=el('div',{
+      css:'padding:12px 16px;border-radius:14px;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.12)')+';background:'+(sel?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)')+';cursor:pointer;transition:all .2s;min-width:140px;flex:1;text-align:center;',
+      id:'slot_'+slot.id
+    });
+    btn.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:'+(sel?'var(--accent)':'var(--txt)')+';'},[slot.label]));
+    if(slot.sub)btn.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin-top:3px;'},[slot.sub]));
+    btn.addEventListener('click',()=>{
+      co.timeSlot=slot.id;
+      // Обновляем все кнопки без render()
+      grid.querySelectorAll('[id^="slot_"]').forEach(b=>{
+        const s=b.id.replace('slot_','');
+        const active=s===slot.id;
+        b.style.borderColor=active?'var(--accent)':'rgba(255,255,255,.12)';
+        b.style.background=active?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)';
+        b.querySelector('div').style.color=active?'var(--accent)':'var(--txt)';
+      });
+      // Активируем кнопку продолжить
+      const continueBtn=document.getElementById('co0-continue');
+      if(continueBtn){continueBtn.disabled=false;continueBtn.style.opacity='1';}
+    });
+    grid.appendChild(btn);
+  });
+  scr.appendChild(grid);
+  page.appendChild(scr);
+
+  const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
+  const b=el('button',{id:'co0-continue',cls:'btn-prim',
+    onClick:()=>{if(co.timeSlot){co.step=1;render();}}});
+  b.textContent='Продолжить →';
+  b.disabled=!co.timeSlot;
+  b.style.opacity=co.timeSlot?'1':'0.4';
+  foot.appendChild(b);page.appendChild(foot);
+}
+
+
 function buildCO1(page){
   const co=S.checkout;
   page.appendChild(coHdr('Адрес',()=>{co._tempAddr=null;S.checkout=null;S.cartOpen=true;render();}));
@@ -1120,6 +1202,7 @@ function buildCO4(page){
       date:new Date().toLocaleDateString('ru'),
       items:{...S.cart},total:co.total,status:'Заказ создан',
       address:addr.street||S.user.addr||'—',
+      timeSlot:co.timeSlot||'Как можно быстрее',
       receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
       disc:co.disc,
       userName:S.user.name||'—',userPhone:S.user.phone||'—',
@@ -1345,7 +1428,7 @@ function buildProfile(){
     [['👤','Данные','data',false],
      ['📦','Мои заказы','orders',activeOrd.length>0],
      ['☘️','Баллы','points',false],
-     ['🔗','Рефералка','referral',false],
+     ['🎫','Промокод','referral',false],
      ['🆘','Поддержка','support',hasUnread],  // правка 13
      ['🚚','Доставка','delivery',false],
      ['🕐','Время работы','hours',false],
@@ -1379,7 +1462,7 @@ function buildProfile(){
     const ri=el('div',{cls:'list-row',onClick:()=>{S.onboard=true;S.obStep=0;render();}});
     ri.appendChild(el('div',{cls:'list-ic'},['✨']));ri.appendChild(el('div',{cls:'list-lbl',css:'color:var(--accent);font-weight:700;'},['Зарегистрироваться']));ri.appendChild(el('div',{cls:'list-arr'},['›']));
     sec.appendChild(ri);
-    ['📦 Мои заказы','☘️ Баллы','🔗 Рефералка'].forEach(lb=>{const r=el('div',{cls:'list-row dis'});r.appendChild(el('span',{},[lb]));sec.appendChild(r);});
+    ['📦 Мои заказы','☘️ Баллы','🎫 Промокод'].forEach(lb=>{const r=el('div',{cls:'list-row dis'});r.appendChild(el('span',{},[lb]));sec.appendChild(r);});
     ['🚚 Доставка','🕐 Время работы','🌸 О нас','🤝 Сотрудничество','🆘 Поддержка'].forEach(lb=>{
       const r=el('div',{cls:'list-row'});r.appendChild(el('span',{css:'font-size:15px;font-weight:500;'},[lb]));sec.appendChild(r);
     });
@@ -1497,7 +1580,7 @@ function buildProfSec(){
     const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','var(--glass)'];
     scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:6px;'},['Заказ №'+o.id]));
     scr.appendChild(el('div',{css:'background:'+c[1]+';color:'+c[0]+';border-radius:100px;padding:4px 14px;font-size:12px;font-weight:700;display:inline-block;margin-bottom:16px;'},[st]));
-    const rows=[['📅 Дата',o.date],['📍 Адрес',o.address],['👤 Получатель',o.receiver==='me'||!o.receiver?'Я':((o.receiver.name||'')+(o.receiver.phone?' · '+o.receiver.phone:''))],['💰 Итого',o.total.toLocaleString('ru')+' ₽']];
+    const rows=[['📅 Дата',o.date],['⏰ Время доставки',o.timeSlot||'—'],['📍 Адрес',o.address],['👤 Получатель',o.receiver==='me'||!o.receiver?'Я':((o.receiver.name||'')+(o.receiver.phone?' · '+o.receiver.phone:''))],['💰 Итого',o.total.toLocaleString('ru')+' ₽']];
     rows.forEach(([k2,v])=>{const r=el('div',{css:'display:flex;justify-content:space-between;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);'});r.appendChild(el('span',{css:'font-size:13px;color:var(--txt2);'},[k2]));r.appendChild(el('span',{css:'font-size:13px;font-weight:600;text-align:right;max-width:55%;'},[v]));scr.appendChild(r);});
     scr.appendChild(el('div',{css:'font-size:15px;font-weight:700;margin-top:16px;margin-bottom:10px;'},['Состав заказа']));
     Object.entries(o.items||{}).forEach(([id,qty])=>{
@@ -1511,28 +1594,36 @@ function buildProfSec(){
   }
 
   else if(k==='points'){
-    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:16px;'},['☘️🌹 Баллы']));
-    const br=el('div',{css:'display:flex;gap:10px;margin-bottom:14px;'});
-    [['☘️','Лепестки',S.user.petals||0,'var(--green)','petals_info'],['🌹','Бутоны',S.user.buds||0,'#ff375f','buds_info']].forEach(([ic,nm,v,c,sec2])=>{
-      const card=el('div',{css:'flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:16px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);cursor:pointer;',
+    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:16px;'},['☘️🌹💰 Баллы']));
+    const br=el('div',{css:'display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;'});
+    [
+      ['☘️','Лепестки',S.user.petals||0,'var(--green)','petals_info'],
+      ['🌹','Бутоны',S.user.buds||0,'#ff375f','buds_info'],
+      ['💰','Рубли',S.user.rubles||0,'var(--gold)','rubles_info']
+    ].forEach(([ic,nm,v,c,sec2])=>{
+      const card=el('div',{css:'flex:1;min-width:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:14px 10px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);cursor:pointer;',
         onClick:()=>{S.profSec=sec2;render();}});
-      card.innerHTML='<div style="font-size:28px;margin-bottom:6px;">'+ic+'</div><div style="font-size:22px;font-weight:800;color:'+c+';">'+v.toLocaleString('ru')+'</div><div style="font-size:12px;color:var(--txt2);font-weight:600;">'+nm+'</div>';
+      card.innerHTML='<div style="font-size:24px;margin-bottom:5px;">'+ic+'</div><div style="font-size:18px;font-weight:800;color:'+c+';">'+v.toLocaleString('ru')+'</div><div style="font-size:11px;color:var(--txt2);font-weight:600;margin-top:2px;">'+nm+'</div>';
       br.appendChild(card);
     });
     scr.appendChild(br);
-    // Правка 18: кнопка Как обменять
-    const exchBtn=el('button',{cls:'btn-glass',css:'margin-bottom:14px;',onClick:()=>{S.profSec='exchange_info';render();}});
-    exchBtn.textContent='🔄 Как обменять';scr.appendChild(exchBtn);
-    const exc=el('div',{cls:'list-sec'});
-    [['⇄ ☘️→🌹','Курс 3:1'],['⇄ 🌹→☘️','Курс 1:2']].forEach(([lb,d])=>{
-      const row=el('div',{cls:'list-row',onClick:()=>{S.profSec='exchange_info';render();}});
-      const inf=el('div',{css:'flex:1;'});
-      inf.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:var(--accent);'},[lb]));
-      inf.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);margin-top:2px;'},[d]));
-      row.appendChild(el('span',{css:'font-size:20px;width:30px;'},['🔄']));row.appendChild(inf);row.appendChild(el('span',{cls:'list-arr'},['›']));
-      exc.appendChild(row);
-    });
-    scr.appendChild(exc);
+    // Кнопка Правила обмена
+    const exchBtn=el('button',{cls:'btn-glass',css:'margin-bottom:14px;',onClick:()=>{S.profSec='exchange_rules';render();}});
+    exchBtn.textContent='📋 Правила обмена';scr.appendChild(exchBtn);
+    // Форма обмена
+    scr.appendChild(buildExchangeForm());
+  }
+
+  else if(k==='exchange_rules'){
+    buildExchangeRules(scr);
+  }
+
+  else if(k==='rubles_info'){
+    scr.appendChild(el('div',{css:'font-size:52px;margin-bottom:14px;text-align:center;'},['💰']));
+    scr.appendChild(el('div',{css:'font-size:26px;font-weight:800;margin-bottom:10px;text-align:center;'},['Рубли 💰']));
+    scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.75;margin-bottom:20px;'},['Рубли вы получаете при обмене бутонов.\nМожно вывести на СБП.']));
+    scr.appendChild(el('div',{css:'background:rgba(255,214,10,.1);border:1px solid rgba(255,214,10,.3);border-radius:18px;padding:16px;text-align:center;'},
+      [el('div',{css:'font-size:18px;font-weight:800;color:var(--gold);'},['Ваш баланс: '+(S.user.rubles||0)+' ₽'])]));
   }
 
   else if(k==='petals_info'){
@@ -1571,12 +1662,22 @@ function buildProfSec(){
   }
 
   else if(k==='referral'){
-    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['🔗 Рефералка']));
-    if(!S.user.refCode){S.user.refCode='VNT'+Math.random().toString(36).slice(2,8).toUpperCase();save();}
-    const code=el('div',{css:'background:rgba(191,90,242,.1);border:1.5px solid rgba(191,90,242,.4);border-radius:20px;padding:20px;text-align:center;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(191,90,242,.2);'});
-    code.innerHTML='<div style="font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:8px;letter-spacing:.5px;">ВАШ КОД</div><div style="font-size:28px;font-weight:900;letter-spacing:5px;color:var(--accent);">'+S.user.refCode+'</div>';
-    const cb=el('button',{css:'margin-top:12px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(191,90,242,.4);',onClick:()=>{navigator.clipboard?.writeText(S.user.refCode);showNotif('Код скопирован!','📋');}});
-    cb.textContent='Скопировать';code.appendChild(cb);scr.appendChild(code);
+    scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:8px;'},['🎫 Промокод']));
+    if(!S.user.promoCode){S.user.promoCode='VNT'+Math.random().toString(36).slice(2,8).toUpperCase();save();}
+    scr.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:16px;'},['Поделитесь своим промокодом с друзьями!\nОни получат 1000 лепестков, вы — 🌹 бутоны.']));
+    const code=el('div',{css:'background:rgba(191,90,242,.1);border:1.5px solid rgba(191,90,242,.4);border-radius:20px;padding:24px;text-align:center;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(191,90,242,.2);'});
+    code.innerHTML='<div style="font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:10px;letter-spacing:.5px;">ВАШ ПРОМОКОД</div><div style="font-size:32px;font-weight:900;letter-spacing:6px;color:var(--accent);">'+S.user.promoCode+'</div>';
+    const cb=el('button',{css:'margin-top:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(191,90,242,.4);',
+      onClick:()=>{navigator.clipboard?.writeText(S.user.promoCode);showNotif('Промокод скопирован!','📋');}});
+    cb.textContent='📋 Скопировать';code.appendChild(cb);scr.appendChild(code);
+    const stats=el('div',{cls:'list-sec'});
+    [['👥 Друзей пригласил',(S.user.referred||0)+' чел.'],['🌹 Заработано бутонов',(S.user.buds||0)+'']].forEach(([lbl,val])=>{
+      const r=el('div',{cls:'list-row'});
+      r.appendChild(el('span',{css:'flex:1;font-size:14px;color:var(--txt2);'},[lbl]));
+      r.appendChild(el('span',{css:'font-size:15px;font-weight:700;'},[val]));
+      stats.appendChild(r);
+    });
+    scr.appendChild(stats);
   }
 
   else if(k==='delivery'){scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:16px;'},['🚚 Доставка']));[['Зона','Москва и ближнее Подмосковье'],['Время','1–3 часа'],['Стоимость','Бесплатно от 2 000 ₽'],['Экспресс','60 мин (+300 ₽)']].forEach(([k2,v])=>{const c=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);'});c.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);font-weight:700;letter-spacing:.5px;margin-bottom:3px;'},[k2.toUpperCase()]));c.appendChild(el('div',{css:'font-size:15px;font-weight:600;'},[v]));scr.appendChild(c);});}
@@ -1727,7 +1828,7 @@ function buildChatDialog(page){
 // ОНБОРДИНГ (9 шагов)
 // ══════════════════════════════════════════
 function buildOnboard(){
-  const steps=[obWelcome,obName,obPhone,obAddr,obDoorInfo,obRoulette,obPetals,obBuds,obExchange];
+  const steps=[obWelcome,obName,obPhone,obAddr,obDoorInfo,obPromo,obRouletteOrPromoSuccess,obPetals,obBuds,obExchange];
   return (steps[S.obStep]||obWelcome)();
 }
 function obWrap(kids){
@@ -1817,6 +1918,97 @@ function obDoorInfo(){
   });
   d.appendChild(btn);return d;
 }
+
+function obPromo(){
+  const d=obWrap([]);
+  d.appendChild(el('div',{cls:'ob-emoji'},['🎫']));
+  d.appendChild(el('div',{cls:'ob-title'},['Промокод']));
+  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:24px;'},['Если у вас есть промокод\nвведите его ниже']));
+
+  let promoError=false;
+  const boxes=[];
+
+  const cont=el('button',{cls:'btn-prim',css:'width:100%;margin-top:20px;display:none;',
+    onClick:async()=>{
+      const code=boxes.map(b=>b.value.toUpperCase()).join('');
+      const promo=VALID_PROMOS[code];
+      if(promo){
+        S.obPromo=code;
+        S.obPromoBonus=promo.bonus;
+        S.obStep=6;render();
+      }else{
+        // Красная подсветка
+        boxes.forEach(b=>{b.style.borderColor='var(--pink)';b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';});
+        promoError=true;
+        showNotif('Такого промокода нет :(','❌');
+      }
+    }});
+  cont.textContent='Применить →';
+
+  const row=el('div',{css:'display:flex;gap:8px;justify-content:center;align-items:center;'});
+  for(let i=0;i<5;i++){
+    const box=el('input',{
+      css:'width:48px;height:56px;border-radius:12px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:20px;font-weight:800;text-align:center;color:var(--txt);outline:none;text-transform:uppercase;-webkit-appearance:none;transition:border-color .2s,box-shadow .2s;',
+      maxlength:'1',inputmode:'text'
+    });
+    boxes.push(box);row.appendChild(box);
+    box.addEventListener('input',()=>{
+      // Только латиница и цифры
+      box.value=box.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,1);
+      // Сброс красного при вводе
+      if(promoError){
+        promoError=false;
+        boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});
+        boxes.forEach(b=>{if(b.value)b.style.borderColor='var(--green)';});
+      }
+      if(box.value){
+        box.style.borderColor='var(--green)';
+        box.style.boxShadow='0 0 0 2px rgba(48,209,88,.2)';
+      }else{
+        box.style.borderColor='rgba(255,255,255,.2)';
+        box.style.boxShadow='none';
+      }
+      if(box.value&&i<4)boxes[i+1].focus();
+      const filled=boxes.filter(b=>b.value).length===5;
+      cont.style.display=filled?'block':'none';
+    });
+    box.addEventListener('keydown',(e)=>{
+      if(e.key==='Backspace'&&!box.value&&i>0)boxes[i-1].focus();
+    });
+  }
+
+  d.appendChild(row);d.appendChild(cont);
+  const skip=el('button',{
+    css:'width:100%;margin-top:14px;background:none;border:none;color:var(--txt2);font-size:15px;cursor:pointer;padding:10px;',
+    onClick:()=>{S.obPromo='';S.obPromoSkipped=true;S.obStep=6;render();}});
+  skip.textContent='Нет, спасибо';
+  d.appendChild(skip);
+  return d;
+}
+
+// Шаг 6: либо PromoSuccess (если промокод введён), либо Roulette (если пропущено)
+function obRouletteOrPromoSuccess(){
+  if(S.obPromo&&VALID_PROMOS[S.obPromo]){
+    return obPromoSuccess();
+  }
+  return obRoulette();
+}
+
+function obPromoSuccess(){
+  const promo=VALID_PROMOS[S.obPromo]||{bonus:1000};
+  const d=obWrap([]);
+  d.appendChild(el('div',{css:'width:80px;height:80px;border-radius:50%;background:rgba(48,209,88,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px;'},['✅']));
+  d.appendChild(el('div',{cls:'ob-title'},['Промокод активирован!']));
+  d.appendChild(el('div',{css:'margin-bottom:24px;text-align:center;'},
+    [el('span',{css:'font-size:14px;color:var(--txt2);'},['Начислили вам: ']),
+     el('span',{css:'font-size:40px;font-weight:900;color:var(--green);display:block;margin:6px 0;'},[promo.bonus.toLocaleString('ru')]),
+     el('span',{css:'font-size:18px;font-weight:700;color:var(--green);'},['☘️ лепестков'])]));
+  const b=el('button',{cls:'btn-prim',css:'width:100%;',
+    onClick:()=>{S.obStep=7;render();}});
+  b.textContent='Круто! 🎉';d.appendChild(b);
+  return d;
+}
+
 function obRoulette(){
   const d=obWrap([]);
   d.appendChild(el('div',{cls:'ob-title'},['Скидка на первый заказ']));
@@ -1911,6 +2103,138 @@ function showResumeOrderDialog(order,savedCo){
   document.getElementById('app').appendChild(ov);
 }
 
+
+// Страница правил обмена
+function buildExchangeRules(scr){
+  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:16px;'},['📋 Правила обмена']));
+  const rules=[
+    {from:'🌹 Бутоны',to:'☘️ Лепестки',rate:'1 🌹 = 3 ☘️',desc:'Курс 1:3'},
+    {from:'🌹 Бутоны',to:'💰 Рубли',rate:'2 🌹 = 1 ₽',desc:'Курс 2:1'},
+  ];
+  rules.forEach(r=>{
+    const card=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px;margin-bottom:10px;'});
+    const row=el('div',{css:'display:flex;align-items:center;gap:10px;'});
+    row.appendChild(el('div',{css:'font-size:14px;font-weight:700;flex:1;'},[r.from]));
+    row.appendChild(el('div',{css:'color:var(--txt3);font-size:20px;'},['→']));
+    row.appendChild(el('div',{css:'font-size:14px;font-weight:700;flex:1;text-align:right;'},[r.to]));
+    card.appendChild(row);
+    card.appendChild(el('div',{css:'font-size:20px;font-weight:900;color:var(--accent);text-align:center;margin:8px 0;'},[r.rate]));
+    card.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);text-align:center;'},[r.desc]));
+    scr.appendChild(card);
+  });
+  const noEx=el('div',{css:'background:rgba(255,55,95,.08);border:1px solid rgba(255,55,95,.25);border-radius:14px;padding:14px 16px;margin-top:10px;'});
+  noEx.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:var(--pink);margin-bottom:4px;'},['⛔ Нельзя обменять']));
+  noEx.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);'},['☘️ Лепестки — только тратить при покупке (до 75% суммы заказа)\n💰 Рубли — только получать из бутонов']));
+  scr.appendChild(noEx);
+}
+
+// Форма обмена (крипто-стиль)
+function buildExchangeForm(){
+  const wrap=el('div',{css:'margin-top:4px;'});
+  wrap.appendChild(el('div',{css:'font-size:15px;font-weight:700;margin-bottom:10px;'},['🔄 Обменять']));
+
+  let fromCur='buds';
+  let toCur='petals';
+  const RATES={'buds->petals':3,'buds->rubles':0.5}; // 1 бутон = 3 лепестка; 2 бутона = 1 руб
+
+  const fromInput=el('input',{
+    css:'width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,55,95,.6);border-radius:16px;padding:14px 16px;font-size:18px;font-weight:700;color:var(--txt);outline:none;',
+    type:'number',min:'0',placeholder:'0',inputmode:'decimal'
+  });
+  fromInput.style.boxShadow='0 0 0 3px rgba(255,55,95,.12)';
+
+  // Кнопки выбора отдаём
+  const fromSelRow=el('div',{css:'display:flex;gap:6px;margin-bottom:6px;'});
+  function updateFromSel(){
+    fromSelRow.querySelectorAll('.cur-btn').forEach(b=>{
+      const sel=b.dataset.cur===fromCur;
+      b.style.borderColor=sel?'var(--pink)':'rgba(255,255,255,.15)';
+      b.style.background=sel?'rgba(255,55,95,.15)':'rgba(255,255,255,.05)';
+      b.style.color=sel?'var(--pink)':'var(--txt2)';
+    });
+    updateResult();
+  }
+  // Только бутоны можно отдавать
+  [['buds','🌹 Бутоны']].forEach(([cur,lbl])=>{
+    const b=el('div',{cls:'cur-btn',css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,55,95,.6);background:rgba(255,55,95,.15);color:var(--pink);transition:all .2s;'});
+    b.dataset.cur=cur;b.textContent=lbl;
+    fromSelRow.appendChild(b);
+  });
+  fromSelRow.appendChild(el('div',{css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;color:var(--txt3);border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);'},['Доступно: '+(S.user?.buds||0)+' 🌹']));
+
+  // Стрелка
+  const arrow=el('div',{css:'text-align:center;font-size:24px;color:var(--txt3);margin:8px 0;'},['↕']);
+
+  // Получаем
+  const toSelRow=el('div',{css:'display:flex;gap:6px;margin-bottom:6px;'});
+  function updateToSel(){
+    toSelRow.querySelectorAll('.to-btn').forEach(b=>{
+      const sel=b.dataset.cur===toCur;
+      b.style.borderColor=sel?'rgba(255,55,95,.7)':'rgba(255,255,255,.15)';
+      b.style.background=sel?'rgba(255,55,95,.15)':'rgba(255,255,255,.05)';
+      b.style.color=sel?'var(--pink)':'var(--txt2)';
+    });
+  }
+  [['petals','☘️ Лепестки','hot'],['rubles','💰 Рубли','']].forEach(([cur,lbl,tag])=>{
+    const b=el('div',{cls:'to-btn',css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:var(--txt2);transition:all .2s;position:relative;'});
+    b.dataset.cur=cur;
+    if(tag==='hot'){
+      b.innerHTML=lbl+'<span style="position:absolute;top:-8px;right:-6px;background:rgba(255,159,10,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:100px;">🔥 Выгоднее</span>';
+    }else{b.textContent=lbl;}
+    b.addEventListener('click',()=>{toCur=cur;updateToSel();updateResult();});
+    toSelRow.appendChild(b);
+  });
+
+  const toInput=el('input',{
+    css:'width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px 16px;font-size:18px;font-weight:700;color:var(--txt2);outline:none;',
+    type:'text',placeholder:'0',readonly:''
+  });
+
+  const resultLabel=el('div',{css:'font-size:12px;color:var(--txt3);margin-top:6px;text-align:right;'});
+
+  function updateResult(){
+    const val=parseFloat(fromInput.value)||0;
+    const rate=fromCur==='buds'&&toCur==='petals'?3:(fromCur==='buds'&&toCur==='rubles'?0.5:0);
+    const result=val*rate;
+    toInput.value=result>0?result.toLocaleString('ru'):'0';
+    const unit=toCur==='petals'?'☘️ лепестков':toCur==='rubles'?'₽ рублей':'';
+    resultLabel.textContent=result>0?'Получите: '+result.toLocaleString('ru')+' '+unit:'';
+    const avail=S.user?(fromCur==='buds'?(S.user.buds||0):0):0;
+    exchBtn.disabled=val<=0||val>avail;
+    exchBtn.style.opacity=exchBtn.disabled?'0.4':'1';
+  }
+
+  fromInput.oninput=()=>updateResult();
+
+  const exchBtn=el('button',{cls:'btn-prim',css:'margin-top:12px;',
+    onClick:()=>{
+      const val=Math.floor(parseFloat(fromInput.value)||0);
+      if(!val||!S.user)return;
+      const avail=fromCur==='buds'?(S.user.buds||0):0;
+      if(val>avail){showNotif('Недостаточно бутонов','⚠️');return;}
+      const rate=fromCur==='buds'&&toCur==='petals'?3:(fromCur==='buds'&&toCur==='rubles'?0.5:0);
+      const gained=val*rate;
+      if(fromCur==='buds')S.user.buds-=val;
+      if(toCur==='petals')S.user.petals=(S.user.petals||0)+gained;
+      if(toCur==='rubles')S.user.rubles=(S.user.rubles||0)+gained;
+      addLog('Обмен: '+val+' 🌹 → '+gained+' '+(toCur==='petals'?'☘️':'₽'),'');
+      fromInput.value='';toInput.value='0';
+      save();showNotif('Обменяно! +'+gained.toLocaleString('ru')+' '+(toCur==='petals'?'☘️':'₽'),'✅');
+    }});
+  exchBtn.textContent='Обменять';exchBtn.disabled=true;exchBtn.style.opacity='0.4';
+
+  wrap.appendChild(fromSelRow);
+  wrap.appendChild(fromInput);
+  wrap.appendChild(arrow);
+  wrap.appendChild(toSelRow);
+  wrap.appendChild(toInput);
+  wrap.appendChild(resultLabel);
+  wrap.appendChild(exchBtn);
+  // Инициализация
+  updateToSel();
+  return wrap;
+}
+
 function buildFAQ(question,answer){
   let open=false;
   const item=el('div',{cls:'faq-item'});
@@ -1943,17 +2267,21 @@ function obBuds(){
 function obExchange(){
   const d=obWrap([]);
   d.appendChild(el('div',{css:'font-size:52px;margin-bottom:14px;'},['🔄']));
-  d.appendChild(el('div',{cls:'ob-title'},['Обменивай ☘️ ↔️ 🌹']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Или наоборот! Всегда по выгодному курсу']));
+  d.appendChild(el('div',{cls:'ob-title'},['Система обмена']));
+  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Бутоны можно обменять\nна лепестки или рубли']));
   const qs=el('div',{cls:'list-sec',css:'width:100%;margin-bottom:22px;'});
-  [['Обменять ☘️ → 🌹','Курс 3:1 — 3 лепестка = 1 бутон'],['Обменять 🌹 → ☘️','Курс 1:2 — 1 бутон = 2 лепестка']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
+  [['🌹 → ☘️ Бутоны в лепестки','Курс 1:3 — 1 бутон = 3 лепестка'],
+   ['🌹 → 💰 Бутоны в рубли','Курс 2:1 — 2 бутона = 1 рубль\nВывод через СБП']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
   d.appendChild(qs);
   const b=el('button',{cls:'btn-prim',css:'width:100%;',onClick:()=>{
+    const promoBonus=S.obPromo&&VALID_PROMOS[S.obPromo]?VALID_PROMOS[S.obPromo].bonus:0;
+    const spinBonus=(!S.obPromo&&S.spinResult)?S.spinResult.v:0;
     S.user={
       name:S.obName||'Пользователь',phone:S.obPhone||'+79001234567',
       addr:S.obAddr||'',floor:S.obFloor,apt:S.obApt,entr:S.obEntr,intercom:S.obIntercom,
-      petals:(S.spinResult?S.spinResult.v:1000),buds:0,referred:0,
+      petals:1000+promoBonus+spinBonus,buds:0,rubles:0,referred:0,
       refCode:'VNT'+Math.random().toString(36).slice(2,8).toUpperCase(),
+      promoCode:'VNT'+Math.random().toString(36).slice(2,8).toUpperCase(),
       addresses:[{street:S.obAddr||'',intercom:S.obIntercom||'',entr:S.obEntr||'',floor:S.obFloor||'',apt:S.obApt||'',note:'',expanded:false}]
     };
     S.onboard=false;save();showNotif('Добро пожаловать, '+S.user.name+'! 🌸');render();
@@ -2069,7 +2397,7 @@ function buildAdminOrders(scr){
 
     // Клиент
     const cli=el('div',{css:'background:rgba(255,255,255,.04);border-radius:14px;padding:12px;margin-bottom:16px;'});
-    [['👤',o.userName||'—'],['📞',o.userPhone||'—'],['📍',o.address||'—'],
+    [['👤',o.userName||'—'],['📞',o.userPhone||'—'],['📍',o.address||'—'],['⏰',o.timeSlot||'—'],
      ['👥',o.receiver==='me'||!o.receiver?'Получатель: Я':('Получатель: '+(o.receiver.name||'')+(o.receiver.phone?' · '+o.receiver.phone:''))]
     ].forEach(([ic,v])=>{
       const r=el('div',{css:'display:flex;align-items:center;gap:8px;padding:4px 0;'});

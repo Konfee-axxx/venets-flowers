@@ -188,14 +188,14 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 .inp-label{font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:6px;letter-spacing:.3px;}
 
 /* ═══ OTP ═══ */
-.phone-row{display:flex;align-items:center;justify-content:center;gap:3px;flex-wrap:nowrap;}
-.phone-prefix{font-size:17px;font-weight:800;color:var(--txt2);flex-shrink:0;margin-right:1px;}
-.phone-sep{font-size:17px;font-weight:700;color:var(--txt3);flex-shrink:0;}
+.phone-row{display:flex;align-items:center;justify-content:center;gap:2px;flex-wrap:nowrap;}
+.phone-prefix{font-size:14px;font-weight:800;color:var(--txt2);flex-shrink:0;margin-right:1px;}
+.phone-sep{font-size:14px;font-weight:700;color:var(--txt3);flex-shrink:0;}
 .otp-box{
-  width:28px;height:38px;border-radius:9px;
+  width:24px;height:32px;border-radius:7px;
   border:1.5px solid rgba(255,255,255,0.15);
   background:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03));
-  font-size:16px;font-weight:700;text-align:center;color:var(--txt);
+  font-size:13px;font-weight:700;text-align:center;color:var(--txt);
   outline:none;transition:border-color .2s;-webkit-appearance:none;
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.1);
 }
@@ -335,14 +335,28 @@ const TAG_CLR = {
   'Мягкий':['#c4a2ff','rgba(196,162,255,.18)'],
 };
 const ROUL_ITEMS = [
-  {v:1000,l:'1 000 ₽',win:true},{v:1123,l:'1 123 ₽',win:true},
-  {v:2000,l:'2 000 ₽',win:false},{v:1374,l:'1 374 ₽',win:true},
-  {v:2500,l:'2 500 ₽',win:false},{v:1449,l:'1 449 ₽',win:true},
-  {v:1200,l:'1 200 ₽',win:true},{v:1500,l:'1 500 ₽',win:true},
-  {v:1690,l:'1 690 ₽',win:false},{v:2615,l:'2 615 ₽',win:false},
-  {v:1350,l:'1 350 ₽',win:true},{v:2516,l:'2 516 ₽',win:false},
-  {v:1250,l:'1 250 ₽',win:true},{v:1480,l:'1 480 ₽',win:true},
+  // Выигрышные (win:true) — с весами согласно ТЗ
+  {v:1000,l:'1 000 ₽',win:true,w:60},  // 60%
+  {v:1100,l:'1 100 ₽',win:true,w:40},  // 40%
+  {v:1200,l:'1 200 ₽',win:true,w:30},  // 30%
+  {v:1300,l:'1 300 ₽',win:true,w:20},  // 20%
+  {v:1400,l:'1 400 ₽',win:true,w:15},  // 15%
+  {v:1500,l:'1 500 ₽',win:true,w:10},  // 10%
+  // Невыигрышные (для анимации)
+  {v:2000,l:'2 000 ₽',win:false,w:0},
+  {v:2500,l:'2 500 ₽',win:false,w:0},
+  {v:1690,l:'1 690 ₽',win:false,w:0},
+  {v:2615,l:'2 615 ₽',win:false,w:0},
+  {v:2516,l:'2 516 ₽',win:false,w:0},
 ];
+// Взвешенный случайный выбор победителя
+function weightedRandom(items){
+  const pool=items.filter(i=>i.win&&i.w>0);
+  const total=pool.reduce((s,i)=>s+i.w,0);
+  let r=Math.random()*total;
+  for(const item of pool){r-=item.w;if(r<=0)return item;}
+  return pool[pool.length-1];
+}
 const CO_MSGS=['Ищем лучший цветок','Ищем в Колумбии','А теперь в Эквадоре','Отправили на самолёте','Уже сел в Шереметьево','Едет на нашу базу','Проверяем каждый цветок','Выбираем лучшее','Нашли идеальные','Ищем упаковку','Начали создавать букет','Аккуратно складываем бутоны','Получается красиво!','Уже собрали букет','Доводим до идеала','Начали искать курьера','Выбираем авто с кондиционером','Нашли лучшего курьера','Уже едет к нам','Завершаем последние штрихи','Почти готово'];
 const PAY_MSGS=['Обрабатывает банк','Заходим в банк','Заходим в операции','Ищем твой платёж','Проверяем','Сверяемся'];
 const BANKS=[
@@ -2052,6 +2066,9 @@ function obPhone(){
 }
 function obAddr(){
   const d=obWrap([]);
+  const backBtn=el('button',{css:'background:none;border:none;color:var(--accent);font-size:16px;font-weight:600;cursor:pointer;padding:4px 8px;align-self:flex-start;margin-bottom:8px;display:flex;align-items:center;gap:4px;',onClick:()=>{S.obStep=3;render();}});
+  backBtn.innerHTML='‹ Назад';
+  d.appendChild(backBtn);
   d.appendChild(el('div',{cls:'ob-title'},['Введи адрес']));
   d.appendChild(el('div',{cls:'ob-sub'},['Адрес, куда доставим вам цветы']));
   let timer;
@@ -2063,13 +2080,16 @@ function obAddr(){
   inp.addEventListener('input',()=>{
     clearTimeout(timer);sendB.style.display='none';inp.classList.remove('valid');
     if(!inp.value)return;
-    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},800);
+    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},500);
   });
   wrap.appendChild(inp);wrap.appendChild(sendB);d.appendChild(wrap);
   return d;
 }
 function obDoorInfo(){
   const d=obWrap([]);
+  const backBtn=el('button',{css:'background:none;border:none;color:var(--accent);font-size:16px;font-weight:600;cursor:pointer;padding:4px 8px;align-self:flex-start;margin-bottom:8px;display:flex;align-items:center;gap:4px;',onClick:()=>{S.obStep=3;render();}});
+  backBtn.innerHTML='‹ Назад';
+  d.appendChild(backBtn);
   d.appendChild(el('div',{cls:'ob-title',css:'font-size:24px;margin-bottom:16px;'},['Детали доставки']));
   const inputs={};
   const fields=[['Домофон','obIntercom'],['Подъезд','obEntr'],['Этаж','obFloor'],['Квартира','obApt']];
@@ -2227,8 +2247,7 @@ function obRoulette(){
   outer.appendChild(track);outer.appendChild(el('div',{cls:'roul-ptr'}));d.appendChild(outer);
   const spinBtn=el('button',{cls:'btn-prim',css:'width:100%;margin-top:18px;',onClick:()=>{
     spinBtn.disabled=true;spinBtn.style.opacity='.5';
-    const winners=ROUL_ITEMS.filter(r=>r.win);
-    const result=winners[Math.floor(Math.random()*winners.length)];
+    const result=weightedRandom(ROUL_ITEMS);
     let targetIdx=Math.floor(repeated.length*0.6);
     const iW=118;
     for(let i=targetIdx;i<repeated.length;i++){if(repeated[i].v===result.v&&repeated[i].win){targetIdx=i;break;}}
@@ -2449,7 +2468,7 @@ function obPetals(){
   const qs=el('div',{cls:'list-sec',css:'width:100%;margin-bottom:18px;'});
   [['Как потратить?','Потратить их можно при покупке любых цветов или подарков!'],['Сколько могу потратить?','Потратить можно до 75% от суммы заказа.\nС каждым заказом процент растёт!']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
   d.appendChild(qs);
-  const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=7;render();}});b.textContent='Супер! 👍';d.appendChild(b);return d;
+  const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=8;render();}});b.textContent='Супер! 👍';d.appendChild(b);return d;
 }
 function obBuds(){
   const d=obWrap([]);

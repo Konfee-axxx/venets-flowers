@@ -247,7 +247,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 .detail-foot{position:sticky;bottom:0;background:rgba(0,0,8,.9);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-top:0.5px solid var(--border);padding:14px 18px calc(14px + var(--safe-b));display:flex;align-items:center;gap:14px;}
 
 /* ═══ ОНБОРДИНГ ═══ */
-.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px calc(32px + var(--safe-b));animation:fdIn .4s ease;overflow:hidden;}
+.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:0 20px calc(20px + var(--safe-b));animation:fdIn .3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .ob-emoji{font-size:58px;margin-bottom:16px;animation:float 3s ease-in-out infinite;}
 .ob-title{font-size:26px;font-weight:800;text-align:center;line-height:1.25;margin-bottom:10px;}
 .ob-sub{font-size:14px;color:var(--txt2);text-align:center;line-height:1.65;margin-bottom:24px;}
@@ -2016,6 +2016,7 @@ function buildChatDialog(page){
 function obWrap(content_nodes){
   const d=document.createElement('div');
   d.className='onboard';
+  d.style.cssText='display:flex;flex-direction:column;align-items:center;min-height:100%;width:100%;position:relative;padding:calc(env(safe-area-inset-top,0px) + 56px) 0 calc(env(safe-area-inset-bottom,0px) + 20px);box-sizing:border-box;';
   content_nodes.forEach(n=>{if(n)d.appendChild(typeof n==='string'?document.createTextNode(n):n);});
   return d;
 }
@@ -2031,7 +2032,6 @@ function obBackBtn(targetStep){
 
 /* ── заголовочная секция (вверху, не по центру) ── */
 function obHeader(emoji, title, sub){
-  const frag=document.createDocumentFragment();
   const topSec=document.createElement('div');
   topSec.style.cssText='display:flex;flex-direction:column;align-items:center;padding:0 8px 24px;width:100%;flex-shrink:0;';
   if(emoji){
@@ -2042,8 +2042,7 @@ function obHeader(emoji, title, sub){
   const t=document.createElement('div');
   t.className='ob-title';t.textContent=title;topSec.appendChild(t);
   if(sub){const s=document.createElement('div');s.className='ob-sub';s.textContent=sub;topSec.appendChild(s);}
-  frag.appendChild(topSec);
-  return frag;
+  return topSec;
 }
 
 function buildOnboard(){
@@ -2055,8 +2054,7 @@ function buildOnboard(){
 /* 0 — Welcome */
 function ob0(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obHeader('🌸','Добро пожаловать\nв Venets Flowers','Цветы и подарки\nс доставкой по Москве'));
   const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
   btn.textContent='Начать →';btn.addEventListener('click',()=>{S.obStep=1;render();});
@@ -2067,8 +2065,7 @@ function ob0(){
 /* 1 — Имя */
 function ob1(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(0));
   d.appendChild(obHeader('👤','Как вас зовут?',null));
   const inp=document.createElement('input');inp.className='inp';
@@ -2092,8 +2089,7 @@ function ob1(){
 /* 2 — Телефон */
 function ob2(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(1));
   d.appendChild(obHeader('📱','Ваш телефон','Актуальный номер — для связи по заказу'));
 
@@ -2137,8 +2133,7 @@ function ob2(){
 /* 3 — Адрес */
 function ob3(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(2));
   d.appendChild(obHeader('📍','Адрес доставки','Улица и дом, куда привезём цветы'));
 
@@ -2165,8 +2160,7 @@ function ob3(){
 /* 4 — Детали доставки */
 function ob4(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(3));
   d.appendChild(obHeader(null,'Детали доставки',null));
 
@@ -2196,8 +2190,7 @@ function ob4(){
 /* 5 — Промокод */
 function ob5(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(4));
   d.appendChild(obHeader('🎫','Промокод','Если есть промокод — введите ниже'));
 
@@ -2273,8 +2266,7 @@ function ob6(){
 function ob6_promoSuccess(){
   const promo=VALID_PROMOS[S.obPromo]||{bonus:1000};
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   const check=document.createElement('div');
   check.style.cssText='width:80px;height:80px;border-radius:50%;background:rgba(48,209,88,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px;';
   check.textContent='✅';
@@ -2290,8 +2282,7 @@ function ob6_promoSuccess(){
 
 function ob6_roulette(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(72px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 48px)';
 
   const title=document.createElement('div');title.className='ob-title';title.textContent='Скидка на первый заказ';
   const sub=document.createElement('div');sub.className='ob-sub';sub.style.marginBottom='16px';sub.textContent='Крути рулетку и узнай свою скидку!';
@@ -2348,8 +2339,7 @@ function ob6_roulette(){
 /* 7 — Лепестки */
 function ob7(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(6));
   d.appendChild(obHeader('☘️','Лепестки ☘️','Получаете за покупки у нас.\nЧем больше покупок — тем выше кэшбек!'));
   const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:18px;';
@@ -2367,8 +2357,7 @@ function ob7(){
 /* 8 — Бутоны */
 function ob8(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(7));
   d.appendChild(obHeader('🌹','Бутоны 🌹','Получаете за приглашённых друзей.\nМожно вывести деньгами или потратить!'));
   const card=document.createElement('div');
@@ -2385,8 +2374,7 @@ function ob8(){
 /* 9 — Обмен + ФИНИШ */
 function ob9(){
   const d=obWrap([]);
-  d.style.justifyContent='flex-start';
-  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(8));
   d.appendChild(obHeader('🔄','Система обмена','Бутоны можно обменять\nна лепестки или рубли'));
   const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:22px;';

@@ -2007,48 +2007,116 @@ function buildChatDialog(page){
 // ══════════════════════════════════════════
 // ОНБОРДИНГ (9 шагов)
 // ══════════════════════════════════════════
-function buildOnboard(){
-  const steps=[obWelcome,obName,obPhone,obAddr,obDoorInfo,obPromo,obRouletteOrPromoSuccess,obPetals,obBuds,obExchange];
-  return (steps[S.obStep]||obWelcome)();
-}
-function obWrap(kids){
-  const d=el('div',{cls:'onboard'});kids.forEach(c=>{if(c)d.appendChild(typeof c==='string'?document.createTextNode(c):c);});return d;
-}
-function obWelcome(){
-  return obWrap([
-    el('div',{cls:'ob-emoji'},['🌸']),
-    el('div',{cls:'ob-title'},['Добро пожаловать\nв Venets Flowers']),
-    el('div',{cls:'ob-sub'},['Цветы и подарки\nс доставкой по Москве']),
-    (() => {const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=1;render();}});b.textContent='Продолжить →';return b;})()
-  ]);
-}
-function obName(){
-  const d=obWrap([]);
-  d.appendChild(el('div',{cls:'ob-emoji'},['👤']));
-  d.appendChild(el('div',{cls:'ob-title'},['Как вас зовут?']));
-  const inp=el('input',{cls:'inp',css:'width:100%;margin-bottom:6px;',placeholder:'Ваше имя'});
-  inp.value=S.obName||'';inp.oninput=()=>{S.obName=inp.value;};
-  d.appendChild(inp);
-  d.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);margin-bottom:24px;text-align:center;'},['Просьба указывать настоящее имя,\nоно нам понадобится для доставки']));
-  const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{if(!inp.value.trim()){showNotif('Введите имя','⚠️');return;}S.obName=inp.value.trim();S.obStep=2;render();}});
-  b.textContent='Продолжить →';d.appendChild(b);
+// ══════════════════════════════════════════
+// ОНБОРДИНГ — полная цепочка 10 шагов
+// 0:Welcome 1:Name 2:Phone 3:Addr 4:Door 5:Promo 6:RouletteOrPromo 7:Petals 8:Buds 9:Exchange→FINISH
+// ══════════════════════════════════════════
+
+/* ── общий wrapper ── */
+function obWrap(content_nodes){
+  const d=document.createElement('div');
+  d.className='onboard';
+  content_nodes.forEach(n=>{if(n)d.appendChild(typeof n==='string'?document.createTextNode(n):n);});
   return d;
 }
-function obPhone(){
+
+/* ── кнопка назад (верхний левый угол) ── */
+function obBackBtn(targetStep){
+  const btn=document.createElement('button');
+  btn.style.cssText='position:absolute;top:calc(16px + env(safe-area-inset-top,0px));left:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:50%;width:38px;height:38px;color:var(--txt);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.15);';
+  btn.textContent='←';
+  btn.addEventListener('click',()=>{S.obStep=targetStep;render();});
+  return btn;
+}
+
+/* ── заголовочная секция (вверху, не по центру) ── */
+function obHeader(emoji, title, sub){
+  const frag=document.createDocumentFragment();
+  const topSec=document.createElement('div');
+  topSec.style.cssText='display:flex;flex-direction:column;align-items:center;padding:0 8px 24px;width:100%;flex-shrink:0;';
+  if(emoji){
+    const em=document.createElement('div');
+    em.style.cssText='font-size:56px;margin-bottom:14px;animation:float 3s ease-in-out infinite;';
+    em.textContent=emoji;topSec.appendChild(em);
+  }
+  const t=document.createElement('div');
+  t.className='ob-title';t.textContent=title;topSec.appendChild(t);
+  if(sub){const s=document.createElement('div');s.className='ob-sub';s.textContent=sub;topSec.appendChild(s);}
+  frag.appendChild(topSec);
+  return frag;
+}
+
+function buildOnboard(){
+  const steps=[ob0,ob1,ob2,ob3,ob4,ob5,ob6,ob7,ob8,ob9];
+  const fn=steps[S.obStep]||ob0;
+  return fn();
+}
+
+/* 0 — Welcome */
+function ob0(){
   const d=obWrap([]);
-  d.appendChild(el('div',{cls:'ob-title',css:'font-size:22px;margin-bottom:8px;'},['Введите номер телефона']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'font-size:13px;margin-bottom:20px;'},['Вводи актуальный номер — он нужен нам\nдля связи по вопросам заказа']));
-  const GROUPS=[3,3,2,2];const boxes=[];
-  const cont=el('button',{cls:'btn-glass',css:'width:100%;margin-top:22px;display:none;',
-    onClick:()=>{S.obPhone='+7'+boxes.map(b=>b.value).join('');S.obStep=3;render();}});
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obHeader('🌸','Добро пожаловать\nв Venets Flowers','Цветы и подарки\nс доставкой по Москве'));
+  const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
+  btn.textContent='Начать →';btn.addEventListener('click',()=>{S.obStep=1;render();});
+  d.appendChild(btn);
+  return d;
+}
+
+/* 1 — Имя */
+function ob1(){
+  const d=obWrap([]);
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(0));
+  d.appendChild(obHeader('👤','Как вас зовут?',null));
+  const inp=document.createElement('input');inp.className='inp';
+  inp.placeholder='Ваше имя';inp.style.width='100%';inp.style.marginBottom='6px';
+  inp.value=S.obName||'';inp.oninput=()=>{S.obName=inp.value;};
+  const hint=document.createElement('div');
+  hint.style.cssText='font-size:12px;color:var(--txt3);text-align:center;margin-bottom:24px;';
+  hint.textContent='Просьба указывать настоящее имя — оно нужно для доставки';
+  const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
+  btn.textContent='Продолжить →';
+  btn.addEventListener('click',()=>{
+    if(!inp.value.trim()){showNotif('Введите имя','⚠️');return;}
+    S.obName=inp.value.trim();S.obStep=2;render();
+  });
+  inp.addEventListener('keydown',(e)=>{if(e.key==='Enter')btn.click();});
+  d.appendChild(inp);d.appendChild(hint);d.appendChild(btn);
+  setTimeout(()=>inp.focus(),100);
+  return d;
+}
+
+/* 2 — Телефон */
+function ob2(){
+  const d=obWrap([]);
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(1));
+  d.appendChild(obHeader('📱','Ваш телефон','Актуальный номер — для связи по заказу'));
+
+  const GROUPS=[3,3,2,2];
+  const boxes=[];
+  const cont=document.createElement('button');cont.className='btn-glass';
+  cont.style.cssText='width:100%;margin-top:22px;display:none;';
   cont.textContent='Продолжить →';
-  const phoneRow=el('div',{cls:'phone-row'});
-  phoneRow.appendChild(el('span',{cls:'phone-prefix'},'+7'));
-  phoneRow.appendChild(el('span',{cls:'phone-sep'},'('));
+  cont.addEventListener('click',()=>{
+    S.obPhone='+7'+boxes.map(b=>b.value).join('');S.obStep=3;render();
+  });
+
+  const phoneRow=document.createElement('div');
+  phoneRow.className='phone-row';
+  const prefix=document.createElement('span');prefix.className='phone-prefix';prefix.textContent='+7';
+  const openParen=document.createElement('span');openParen.className='phone-sep';openParen.textContent='(';
+  phoneRow.appendChild(prefix);phoneRow.appendChild(openParen);
+
   GROUPS.forEach((len,gi)=>{
     for(let j=0;j<len;j++){
       const idx=boxes.length;
-      const box=el('input',{cls:'otp-box',type:'tel',maxlength:'1',inputmode:'numeric',placeholder:'•'});
+      const box=document.createElement('input');
+      box.className='otp-box';box.type='tel';box.maxLength=1;box.inputMode='numeric';box.placeholder='•';
       boxes.push(box);phoneRow.appendChild(box);
       box.addEventListener('input',()=>{
         if(box.value&&!/\d/.test(box.value)){box.value='';return;}
@@ -2058,194 +2126,205 @@ function obPhone(){
       });
       box.addEventListener('keydown',(e)=>{if(e.key==='Backspace'&&!box.value&&idx>0)boxes[idx-1].focus();});
     }
-    if(gi===0)phoneRow.appendChild(el('span',{cls:'phone-sep'},')'));
-    else if(gi<3)phoneRow.appendChild(el('span',{cls:'phone-sep'},'-'));
+    if(gi===0){const s=document.createElement('span');s.className='phone-sep';s.textContent=')';phoneRow.appendChild(s);}
+    else if(gi<3){const s=document.createElement('span');s.className='phone-sep';s.textContent='-';phoneRow.appendChild(s);}
   });
+
   d.appendChild(phoneRow);d.appendChild(cont);
   return d;
 }
-function obAddr(){
+
+/* 3 — Адрес */
+function ob3(){
   const d=obWrap([]);
-  const backBtn=el('button',{css:'background:none;border:none;color:var(--accent);font-size:16px;font-weight:600;cursor:pointer;padding:4px 8px;align-self:flex-start;margin-bottom:8px;display:flex;align-items:center;gap:4px;',onClick:()=>{S.obStep=3;render();}});
-  backBtn.innerHTML='‹ Назад';
-  d.appendChild(backBtn);
-  d.appendChild(el('div',{cls:'ob-title'},['Введи адрес']));
-  d.appendChild(el('div',{cls:'ob-sub'},['Адрес, куда доставим вам цветы']));
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(2));
+  d.appendChild(obHeader('📍','Адрес доставки','Улица и дом, куда привезём цветы'));
+
+  const wrap=document.createElement('div');wrap.style.cssText='position:relative;width:100%;';
+  const inp=document.createElement('input');inp.className='inp';inp.placeholder='Улица, дом';inp.style.width='100%';
+  inp.value=S.obAddr||'';
+  const sendB=document.createElement('button');
+  sendB.style.cssText='position:absolute;right:10px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;';
+  sendB.textContent='→';
+  sendB.addEventListener('click',()=>{S.obAddr=inp.value;S.obStep=4;render();});
   let timer;
-  const wrap=el('div',{css:'position:relative;width:100%;'});
-  const inp=el('input',{cls:'inp',placeholder:'Улица, дом'});
-  const sendB=el('button',{css:'position:absolute;right:10px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;',
-    onClick:()=>{S.obAddr=inp.value;S.obStep=4;render();}});
-  sendB.textContent='↑';
   inp.addEventListener('input',()=>{
     clearTimeout(timer);sendB.style.display='none';inp.classList.remove('valid');
     if(!inp.value)return;
-    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},500);
+    timer=setTimeout(()=>{inp.classList.add('valid');sendB.style.display='flex';},400);
   });
-  wrap.appendChild(inp);wrap.appendChild(sendB);d.appendChild(wrap);
+  if(inp.value){inp.classList.add('valid');sendB.style.display='flex';}
+  wrap.appendChild(inp);wrap.appendChild(sendB);
+  d.appendChild(wrap);
+  setTimeout(()=>inp.focus(),100);
   return d;
 }
-function obDoorInfo(){
+
+/* 4 — Детали доставки */
+function ob4(){
   const d=obWrap([]);
-  const backBtn=el('button',{css:'background:none;border:none;color:var(--accent);font-size:16px;font-weight:600;cursor:pointer;padding:4px 8px;align-self:flex-start;margin-bottom:8px;display:flex;align-items:center;gap:4px;',onClick:()=>{S.obStep=3;render();}});
-  backBtn.innerHTML='‹ Назад';
-  d.appendChild(backBtn);
-  d.appendChild(el('div',{cls:'ob-title',css:'font-size:24px;margin-bottom:16px;'},['Детали доставки']));
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(3));
+  d.appendChild(obHeader(null,'Детали доставки',null));
+
+  const fields=[['Домофон','obIntercom','🔢'],['Подъезд','obEntr','🚪'],['Этаж','obFloor','🏢'],['Квартира','obApt','🏠']];
   const inputs={};
-  const fields=[['Домофон','obIntercom'],['Подъезд','obEntr'],['Этаж','obFloor'],['Квартира','obApt']];
-  const btn=el('button',{cls:'btn-glass',css:'width:100%;margin-top:16px;display:none;',onClick:()=>{S.obStep=5;render();}});
+  const btn=document.createElement('button');btn.className='btn-glass';btn.style.cssText='width:100%;margin-top:16px;';
   btn.textContent='Продолжить →';
-  const check=()=>{const ok=fields.every(([,k])=>inputs[k]?.value);btn.style.display=ok?'block':'none';};
+  btn.addEventListener('click',()=>{S.obStep=5;render();});
+
+  const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-bottom:4px;';
   fields.forEach(([lb,k])=>{
-    d.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:10px;width:100%;text-align:left;'},[lb]));
-    const inp=el('input',{cls:'inp',placeholder:lb});inp.value=S[k]||'';
-    inp.addEventListener('input',()=>{S[k]=inp.value;if(inp.value)inp.classList.add('valid');else inp.classList.remove('valid');check();});
-    inputs[k]=inp;d.appendChild(inp);
+    const cell=document.createElement('div');
+    const lbl=document.createElement('div');lbl.className='inp-label';lbl.style.cssText='display:block;margin-bottom:5px;';lbl.textContent=lb;
+    const inp=document.createElement('input');inp.className='inp';inp.placeholder=lb;
+    inp.value=S[k]||'';
+    inp.addEventListener('input',()=>{S[k]=inp.value;if(inp.value)inp.classList.add('valid');else inp.classList.remove('valid');});
+    if(inp.value)inp.classList.add('valid');
+    inputs[k]=inp;
+    cell.appendChild(lbl);cell.appendChild(inp);
+    grid.appendChild(cell);
   });
-  d.appendChild(btn);return d;
+  d.appendChild(grid);
+  d.appendChild(btn);
+  return d;
 }
 
-function obPromo(){
+/* 5 — Промокод */
+function ob5(){
   const d=obWrap([]);
-  d.appendChild(el('div',{cls:'ob-emoji'},['🎫']));
-  d.appendChild(el('div',{cls:'ob-title'},['Промокод']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:24px;'},['Если у вас есть промокод,\nвведите его ниже']));
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(4));
+  d.appendChild(obHeader('🎫','Промокод','Если есть промокод — введите ниже'));
 
   let promoError=false;
   const boxes=[];
 
-  const cont=el('button',{cls:'btn-prim',css:'width:100%;margin-top:20px;display:none;',
-    onClick:()=>{
-      const code=boxes.map(b=>b.value.toUpperCase()).join('');
-      const promo=VALID_PROMOS[code];
-      if(promo){
-        S.obPromo=code;
-        S.obPromoBonus=promo.bonus;
-        S.obStep=6;render();
-      }else{
-        boxes.forEach(b=>{
-          b.style.borderColor='var(--pink)';
-          b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';
-        });
-        promoError=true;
-        showNotif('Такого промокода нет :(','❌');
-      }
-    }});
+  const cont=document.createElement('button');cont.className='btn-prim';
+  cont.style.cssText='width:100%;margin-top:20px;display:none;';
   cont.textContent='Применить →';
+  cont.addEventListener('click',()=>{
+    const code=boxes.map(b=>b.value.toUpperCase()).join('');
+    const promo=VALID_PROMOS[code];
+    if(promo){S.obPromo=code;S.obPromoBonus=promo.bonus;S.obStep=6;render();}
+    else{
+      boxes.forEach(b=>{b.style.borderColor='var(--pink)';b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';});
+      promoError=true;showNotif('Такого промокода нет :(','❌');
+    }
+  });
 
-  const row=el('div',{css:'display:flex;gap:8px;justify-content:center;align-items:center;'});
-
+  const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;justify-content:center;align-items:center;';
   for(let i=0;i<5;i++){
     const idx=i;
     const box=document.createElement('input');
-    box.maxLength=1;
-    box.setAttribute('inputmode','text');
-    box.setAttribute('autocomplete','off');
+    box.maxLength=1;box.setAttribute('inputmode','text');box.setAttribute('autocomplete','off');
     box.style.cssText='width:52px;height:60px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:22px;font-weight:800;text-align:center;color:var(--txt);outline:none;text-transform:uppercase;-webkit-appearance:none;transition:border-color .2s,box-shadow .2s;';
-    boxes.push(box);
-    row.appendChild(box);
-
-    function refreshStyles(){
-      if(promoError) return;
+    boxes.push(box);row.appendChild(box);
+    function refresh(){
+      if(promoError)return;
       boxes.forEach(b=>{
-        if(b.value){
-          b.style.borderColor='var(--green)';
-          b.style.boxShadow='0 0 0 2px rgba(48,209,88,.2)';
-        }else{
-          b.style.borderColor='rgba(255,255,255,.2)';
-          b.style.boxShadow='none';
-        }
+        b.style.borderColor=b.value?'var(--green)':'rgba(255,255,255,.2)';
+        b.style.boxShadow=b.value?'0 0 0 2px rgba(48,209,88,.2)':'none';
       });
       cont.style.display=boxes.every(b=>b.value)?'block':'none';
     }
-
     box.addEventListener('keydown',(e)=>{
-      // Backspace
       if(e.key==='Backspace'){
-        if(!box.value&&idx>0){e.preventDefault();boxes[idx-1].focus();boxes[idx-1].value='';refreshStyles();}
-        else{setTimeout(refreshStyles,0);}
+        if(!box.value&&idx>0){e.preventDefault();boxes[idx-1].focus();boxes[idx-1].value='';refresh();}
+        else setTimeout(refresh,0);
         if(promoError){promoError=false;boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});}
         return;
       }
-      // Только латиница и цифры
       if(!/^[a-zA-Z0-9]$/.test(e.key)&&e.key.length===1){e.preventDefault();return;}
     });
-
-    box.addEventListener('input',(e)=>{
-      // Оставляем только разрешённые символы, верхний регистр
-      const clean=box.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
-      box.value=clean.slice(0,1);
+    box.addEventListener('input',()=>{
+      box.value=box.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,1);
       if(promoError){promoError=false;boxes.forEach(b=>{b.style.borderColor='';b.style.boxShadow='';});}
-      refreshStyles();
+      refresh();
       if(box.value&&idx<4)boxes[idx+1].focus();
     });
-
     box.addEventListener('paste',(e)=>{
       e.preventDefault();
       const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
-      for(let j=0;j<5&&idx+j<5;j++){
-        boxes[idx+j].value=text[j]||'';
-      }
-      refreshStyles();
-      const last=Math.min(idx+text.length,4);
-      boxes[last].focus();
+      for(let j=0;j<5&&idx+j<5;j++)boxes[idx+j].value=text[j]||'';
+      refresh();boxes[Math.min(idx+text.length,4)].focus();
     });
   }
 
-  d.appendChild(row);
-  d.appendChild(cont);
-  const skip=el('button',{
-    css:'width:100%;margin-top:14px;background:none;border:none;color:var(--txt2);font-size:15px;cursor:pointer;padding:10px;',
-    onClick:()=>{S.obPromo='';S.obPromoSkipped=true;S.obStep=6;render();}});
+  const skip=document.createElement('button');
+  skip.style.cssText='width:100%;margin-top:14px;background:none;border:none;color:var(--txt2);font-size:15px;cursor:pointer;padding:10px;';
   skip.textContent='Нет, спасибо';
-  d.appendChild(skip);
+  skip.addEventListener('click',()=>{S.obPromo='';S.obPromoSkipped=true;S.obStep=6;render();});
+
+  d.appendChild(row);d.appendChild(cont);d.appendChild(skip);
   return d;
 }
 
-// Шаг 6: либо PromoSuccess (если промокод введён), либо Roulette (если пропущено)
-function obRouletteOrPromoSuccess(){
-  if(S.obPromo&&VALID_PROMOS[S.obPromo]){
-    return obPromoSuccess();
-  }
-  return obRoulette();
+/* 6 — Рулетка ИЛИ PromoSuccess */
+function ob6(){
+  if(S.obPromo&&VALID_PROMOS[S.obPromo]) return ob6_promoSuccess();
+  return ob6_roulette();
 }
 
-function obPromoSuccess(){
+function ob6_promoSuccess(){
   const promo=VALID_PROMOS[S.obPromo]||{bonus:1000};
   const d=obWrap([]);
-  d.appendChild(el('div',{css:'width:80px;height:80px;border-radius:50%;background:rgba(48,209,88,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px;'},['✅']));
-  d.appendChild(el('div',{cls:'ob-title'},['Промокод активирован!']));
-  d.appendChild(el('div',{css:'margin-bottom:24px;text-align:center;'},
-    [el('span',{css:'font-size:14px;color:var(--txt2);'},['Начислили вам: ']),
-     el('span',{css:'font-size:40px;font-weight:900;color:var(--green);display:block;margin:6px 0;'},[promo.bonus.toLocaleString('ru')]),
-     el('span',{css:'font-size:18px;font-weight:700;color:var(--green);'},['☘️ лепестков'])]));
-  const b=el('button',{cls:'btn-prim',css:'width:100%;',
-    onClick:()=>{S.obStep=7;render();}});
-  b.textContent='Круто! 🎉';d.appendChild(b);
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  const check=document.createElement('div');
+  check.style.cssText='width:80px;height:80px;border-radius:50%;background:rgba(48,209,88,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px;';
+  check.textContent='✅';
+  const title=document.createElement('div');title.className='ob-title';title.textContent='Промокод активирован!';
+  const bonusWrap=document.createElement('div');bonusWrap.style.cssText='text-align:center;margin-bottom:24px;';
+  bonusWrap.innerHTML='<span style="font-size:14px;color:var(--txt2);">Начислили вам: </span><span style="font-size:44px;font-weight:900;color:var(--green);display:block;margin:6px 0;">'+promo.bonus.toLocaleString('ru')+'</span><span style="font-size:18px;font-weight:700;color:var(--green);">☘️ лепестков</span>';
+  const btn=document.createElement('button');btn.className='btn-prim';btn.style.width='100%';
+  btn.textContent='Круто! 🎉';
+  btn.addEventListener('click',()=>{S.obStep=7;render();});  // → 7 Petals
+  d.appendChild(check);d.appendChild(title);d.appendChild(bonusWrap);d.appendChild(btn);
   return d;
 }
 
-function obRoulette(){
+function ob6_roulette(){
   const d=obWrap([]);
-  d.appendChild(el('div',{cls:'ob-title'},['Скидка на первый заказ']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:16px;'},['Крути рулетку и узнай свою скидку!']));
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(72px + env(safe-area-inset-top,0px))';
+
+  const title=document.createElement('div');title.className='ob-title';title.textContent='Скидка на первый заказ';
+  const sub=document.createElement('div');sub.className='ob-sub';sub.style.marginBottom='16px';sub.textContent='Крути рулетку и узнай свою скидку!';
+  d.appendChild(title);d.appendChild(sub);
+
   if(S.spun&&S.spinResult){
-    const pr=el('div',{css:'background:rgba(48,209,88,.1);border:1.5px solid var(--green);border-radius:24px;padding:28px;text-align:center;margin:0 0 20px;box-shadow:inset 0 1px 0 rgba(48,209,88,.2),0 8px 32px rgba(48,209,88,.15);width:100%;'});
+    const pr=document.createElement('div');
+    pr.style.cssText='background:rgba(48,209,88,.1);border:1.5px solid var(--green);border-radius:24px;padding:28px;text-align:center;margin:0 0 20px;box-shadow:inset 0 1px 0 rgba(48,209,88,.2),0 8px 32px rgba(48,209,88,.15);width:100%;';
     pr.innerHTML='<div style="font-size:44px;margin-bottom:8px;">🎉</div><div style="font-size:14px;color:var(--txt2);margin-bottom:6px;font-weight:600;">Твоя скидка:</div><div style="font-size:48px;font-weight:900;color:var(--green);">'+S.spinResult.l+'</div><div style="font-size:13px;color:var(--txt2);margin-top:6px;">☘️ +'+S.spinResult.v+' лепестков начислено</div>';
-    d.appendChild(pr);
-    const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=7;render();}});b.textContent='Круто, спасибо! 🎊';d.appendChild(b);return d;
+    const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
+    btn.textContent='Круто, спасибо! 🎊';
+    btn.addEventListener('click',()=>{S.obStep=7;render();});  // → 7 Petals
+    d.appendChild(pr);d.appendChild(btn);
+    return d;
   }
+
   const repeated=[...ROUL_ITEMS,...ROUL_ITEMS,...ROUL_ITEMS,...ROUL_ITEMS];
-  const outer=el('div',{cls:'roul-outer',css:'width:100%;'});
-  const track=el('div',{cls:'roul-track'});
+  const outer=document.createElement('div');outer.className='roul-outer';outer.style.width='100%';
+  const track=document.createElement('div');track.className='roul-track';
   repeated.forEach(item=>{
-    const ri=el('div',{cls:'roul-item'});
-    ri.appendChild(el('div',{css:'font-size:18px;margin-bottom:4px;'},[item.win?'🎁':'💎']));
-    ri.appendChild(el('div',{css:'font-size:13px;font-weight:800;color:'+(item.win?'var(--green)':'var(--txt3)')+';'},[item.l]));
-    track.appendChild(ri);
+    const ri=document.createElement('div');ri.className='roul-item';
+    const em=document.createElement('div');em.style.cssText='font-size:18px;margin-bottom:4px;';em.textContent=item.win?'🎁':'💎';
+    const lbl=document.createElement('div');lbl.style.cssText='font-size:13px;font-weight:800;color:'+(item.win?'var(--green)':'var(--txt3)')+';';lbl.textContent=item.l;
+    ri.appendChild(em);ri.appendChild(lbl);track.appendChild(ri);
   });
-  outer.appendChild(track);outer.appendChild(el('div',{cls:'roul-ptr'}));d.appendChild(outer);
-  const spinBtn=el('button',{cls:'btn-prim',css:'width:100%;margin-top:18px;',onClick:()=>{
+  outer.appendChild(track);
+  const ptr=document.createElement('div');ptr.className='roul-ptr';
+  outer.appendChild(ptr);
+  d.appendChild(outer);
+
+  const spinBtn=document.createElement('button');spinBtn.className='btn-prim';spinBtn.style.cssText='width:100%;margin-top:18px;';
+  spinBtn.textContent='🎰 Крутить!';
+  spinBtn.addEventListener('click',()=>{
     spinBtn.disabled=true;spinBtn.style.opacity='.5';
     const result=weightedRandom(ROUL_ITEMS);
     let targetIdx=Math.floor(repeated.length*0.6);
@@ -2261,247 +2340,92 @@ function obRoulette(){
       else{S.spinResult=result;S.spun=true;render();}
     }
     requestAnimationFrame(animate);
-  }});
-  spinBtn.textContent='🎰 Крутить!';d.appendChild(spinBtn);return d;
-}
-// Диалог: продолжить оформление или отменить
-function showResumeOrderDialog(order,savedCo){
-  const ov=el('div',{cls:'overlay fade-in',onClick:(e)=>{if(e.target===ov)ov.remove();}});
-  const sh=el('div',{cls:'sheet slide-up',css:'padding-bottom:calc(20px + var(--safe-b));'});
-  sh.appendChild(el('div',{cls:'drag'}));
-  sh.appendChild(el('div',{css:'font-size:18px;font-weight:800;text-align:center;padding:0 18px 6px;'},['Заказ №'+order.id]));
-  sh.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);text-align:center;padding:0 18px 18px;'},['Оформление не завершено. Продолжить?']));
-
-  const contB=el('button',{cls:'btn-prim',css:'margin:0 18px;width:calc(100% - 36px);',
-    onClick:()=>{
-      ov.remove();
-      // Восстанавливаем checkout из сохранённого
-      S.checkout={
-        step:savedCo.step||4,
-        orderId:savedCo.orderId,
-        total:savedCo.total||order.total,
-        disc:savedCo.disc||0,
-        receiver:savedCo.receiver||'me',
-        otherName:savedCo.otherName||'',
-        otherPhone:savedCo.otherPhone||'',
-        addrIdx:savedCo.addrIdx||0,
-        payStatus:savedCo.payStatus||null,
-        payBank:savedCo.payBank||null,
-        payPhone:savedCo.payPhone||null,
-        payName:savedCo.payName||null,
-        _deadline:savedCo._deadline||null,
-        msgIdx:0,
-        _paidEnabled:savedCo.step===5, // если возвращаемся на шаг оплаты — кнопка уже активна
-      };
-      render();
-    }});
-  contB.textContent='▶ Продолжить оформление';
-
-  const cancelB=el('button',{
-    css:'display:block;width:calc(100% - 36px);margin:10px 18px 0;padding:15px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-size:15px;font-weight:600;cursor:pointer;',
-    onClick:()=>{
-      ov.remove();
-      // Отменяем заказ
-      order.status='Отменён';order.payState='cancelled';
-      setLocalOrderState(order.id,{payState:'cancelled'});
-      clearCheckout();
-      addLog('Заказ №'+order.id+' отменён клиентом','');
-      save();
-      showNotif('Заказ отменён','❌');
-      render();
-    }});
-  cancelB.textContent='✕ Отменить заказ';
-
-  sh.appendChild(contB);
-  sh.appendChild(cancelB);
-  ov.appendChild(sh);
-  document.getElementById('app').appendChild(ov);
+  });
+  d.appendChild(spinBtn);
+  return d;
 }
 
-
-// Страница правил обмена
-function buildExchangeRules(scr){
-  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:16px;'},['📋 Правила обмена']));
-  const rules=[
-    {from:'🌹 Бутоны',to:'☘️ Лепестки',rate:'1 🌹 = 3 ☘️',desc:'Курс 1:3'},
-    {from:'🌹 Бутоны',to:'💰 Рубли',rate:'2 🌹 = 1 ₽',desc:'Курс 2:1'},
-  ];
-  rules.forEach(r=>{
-    const card=el('div',{css:'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px;margin-bottom:10px;'});
-    const row=el('div',{css:'display:flex;align-items:center;gap:10px;'});
-    row.appendChild(el('div',{css:'font-size:14px;font-weight:700;flex:1;'},[r.from]));
-    row.appendChild(el('div',{css:'color:var(--txt3);font-size:20px;'},['→']));
-    row.appendChild(el('div',{css:'font-size:14px;font-weight:700;flex:1;text-align:right;'},[r.to]));
-    card.appendChild(row);
-    card.appendChild(el('div',{css:'font-size:20px;font-weight:900;color:var(--accent);text-align:center;margin:8px 0;'},[r.rate]));
-    card.appendChild(el('div',{css:'font-size:12px;color:var(--txt3);text-align:center;'},[r.desc]));
-    scr.appendChild(card);
-  });
-  const noEx=el('div',{css:'background:rgba(255,55,95,.08);border:1px solid rgba(255,55,95,.25);border-radius:14px;padding:14px 16px;margin-top:10px;'});
-  noEx.appendChild(el('div',{css:'font-size:14px;font-weight:700;color:var(--pink);margin-bottom:4px;'},['⛔ Нельзя обменять']));
-  noEx.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);'},['☘️ Лепестки — только тратить при покупке (до 75% суммы заказа)\n💰 Рубли — только получать из бутонов']));
-  scr.appendChild(noEx);
-}
-
-// Форма обмена (крипто-стиль)
-function buildExchangeForm(){
-  const wrap=el('div',{css:'margin-top:4px;'});
-  wrap.appendChild(el('div',{css:'font-size:15px;font-weight:700;margin-bottom:10px;'},['🔄 Обменять']));
-
-  let fromCur='buds';
-  let toCur='petals';
-  const RATES={'buds->petals':1/3,'buds->rubles':0.5}; // 3 бутона = 1 лепесток; 2 бутона = 1 руб
-
-  const fromInput=el('input',{
-    css:'width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,55,95,.6);border-radius:16px;padding:14px 16px;font-size:18px;font-weight:700;color:var(--txt);outline:none;',
-    type:'number',min:'0',placeholder:'0',inputmode:'decimal'
-  });
-  fromInput.style.boxShadow='0 0 0 3px rgba(255,55,95,.12)';
-
-  // Кнопки выбора отдаём
-  const fromSelRow=el('div',{css:'display:flex;gap:6px;margin-bottom:6px;'});
-  function updateFromSel(){
-    fromSelRow.querySelectorAll('.cur-btn').forEach(b=>{
-      const sel=b.dataset.cur===fromCur;
-      b.style.borderColor=sel?'var(--pink)':'rgba(255,255,255,.15)';
-      b.style.background=sel?'rgba(255,55,95,.15)':'rgba(255,255,255,.05)';
-      b.style.color=sel?'var(--pink)':'var(--txt2)';
-    });
-    updateResult();
-  }
-  // Только бутоны можно отдавать
-  [['buds','🌹 Бутоны']].forEach(([cur,lbl])=>{
-    const b=el('div',{cls:'cur-btn',css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,55,95,.6);background:rgba(255,55,95,.15);color:var(--pink);transition:all .2s;'});
-    b.dataset.cur=cur;b.textContent=lbl;
-    fromSelRow.appendChild(b);
-  });
-  fromSelRow.appendChild(el('div',{css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;color:var(--txt3);border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);'},['Доступно: '+(S.user?.buds||0)+' 🌹']));
-
-  // Стрелка
-  const arrow=el('div',{css:'text-align:center;font-size:24px;color:var(--txt3);margin:8px 0;'},['↕']);
-
-  // Получаем
-  const toSelRow=el('div',{css:'display:flex;gap:6px;margin-bottom:6px;'});
-  function updateToSel(){
-    toSelRow.querySelectorAll('.to-btn').forEach(b=>{
-      const sel=b.dataset.cur===toCur;
-      b.style.borderColor=sel?'rgba(255,55,95,.7)':'rgba(255,255,255,.15)';
-      b.style.background=sel?'rgba(255,55,95,.15)':'rgba(255,255,255,.05)';
-      b.style.color=sel?'var(--pink)':'var(--txt2)';
-    });
-  }
-  [['petals','☘️ Лепестки','hot'],['rubles','💰 Рубли','']].forEach(([cur,lbl,tag])=>{
-    const b=el('div',{cls:'to-btn',css:'flex:1;padding:10px;border-radius:12px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:var(--txt2);transition:all .2s;position:relative;'});
-    b.dataset.cur=cur;
-    if(tag==='hot'){
-      b.innerHTML=lbl+'<span style="position:absolute;top:-8px;right:-6px;background:rgba(255,159,10,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:100px;">🔥 Выгоднее</span>';
-    }else{b.textContent=lbl;}
-    b.addEventListener('click',()=>{toCur=cur;updateToSel();updateResult();});
-    toSelRow.appendChild(b);
-  });
-
-  const toInput=el('input',{
-    css:'width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px 16px;font-size:18px;font-weight:700;color:var(--txt2);outline:none;',
-    type:'text',placeholder:'0',readonly:''
-  });
-
-  const resultLabel=el('div',{css:'font-size:12px;color:var(--txt3);margin-top:6px;text-align:right;'});
-
-  function updateResult(){
-    const val=parseFloat(fromInput.value)||0;
-    const rate=fromCur==='buds'&&toCur==='petals'?(1/3):(fromCur==='buds'&&toCur==='rubles'?0.5:0);
-    const result=val*rate;
-    toInput.value=result>0?Math.floor(result).toLocaleString('ru'):'0';
-    const unit=toCur==='petals'?'☘️ лепестков':toCur==='rubles'?'₽ рублей':'';
-    resultLabel.textContent=result>0?'Получите: '+result.toLocaleString('ru')+' '+unit:'';
-    const avail=S.user?(fromCur==='buds'?(S.user.buds||0):0):0;
-    exchBtn.disabled=val<=0||val>avail;
-    exchBtn.style.opacity=exchBtn.disabled?'0.4':'1';
-  }
-
-  fromInput.oninput=()=>updateResult();
-
-  const exchBtn=el('button',{cls:'btn-prim',css:'margin-top:12px;',
-    onClick:()=>{
-      const val=Math.floor(parseFloat(fromInput.value)||0);
-      if(!val||!S.user)return;
-      const avail=fromCur==='buds'?(S.user.buds||0):0;
-      if(val>avail){showNotif('Недостаточно бутонов','⚠️');return;}
-      const rate=fromCur==='buds'&&toCur==='petals'?(1/3):(fromCur==='buds'&&toCur==='rubles'?0.5:0);
-      const gained=Math.floor(val*rate);
-      if(fromCur==='buds')S.user.buds-=val;
-      if(toCur==='petals')S.user.petals=(S.user.petals||0)+gained;
-      if(toCur==='rubles')S.user.rubles=(S.user.rubles||0)+gained;
-      addLog('Обмен: '+val+' 🌹 → '+gained+' '+(toCur==='petals'?'☘️':'₽'),'');
-      fromInput.value='';toInput.value='0';
-      save();showNotif('Обменяно! +'+gained.toLocaleString('ru')+' '+(toCur==='petals'?'☘️':'₽'),'✅');
-    }});
-  exchBtn.textContent='Обменять';exchBtn.disabled=true;exchBtn.style.opacity='0.4';
-
-  wrap.appendChild(fromSelRow);
-  wrap.appendChild(fromInput);
-  wrap.appendChild(arrow);
-  wrap.appendChild(toSelRow);
-  wrap.appendChild(toInput);
-  wrap.appendChild(resultLabel);
-  wrap.appendChild(exchBtn);
-  // Инициализация
-  updateToSel();
-  return wrap;
-}
-
-function buildFAQ(question,answer){
-  let open=false;
-  const item=el('div',{cls:'faq-item'});
-  const btn=el('button',{cls:'faq-q'});
-  btn.appendChild(el('span',{},[question]));
-  const arr=el('span',{cls:'faq-arr'},[txt('›')]);btn.appendChild(arr);
-  const body=el('div',{cls:'faq-body'});body.appendChild(el('div',{cls:'faq-txt'},[answer]));
-  btn.addEventListener('click',()=>{open=!open;body.classList.toggle('open',open);arr.classList.toggle('open',open);});
-  item.appendChild(btn);item.appendChild(body);return item;
-}
-function obPetals(){
+/* 7 — Лепестки */
+function ob7(){
   const d=obWrap([]);
-  d.appendChild(el('div',{css:'font-size:52px;margin-bottom:14px;'},['☘️']));
-  d.appendChild(el('div',{cls:'ob-title'},['Лепестки ☘️']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Вы их получаете за покупки у нас.\nЧем больше покупок — тем выше кэшбек!']));
-  const qs=el('div',{cls:'list-sec',css:'width:100%;margin-bottom:18px;'});
-  [['Как потратить?','Потратить их можно при покупке любых цветов или подарков!'],['Сколько могу потратить?','Потратить можно до 75% от суммы заказа.\nС каждым заказом процент растёт!']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(6));
+  d.appendChild(obHeader('☘️','Лепестки ☘️','Получаете за покупки у нас.\nЧем больше покупок — тем выше кэшбек!'));
+  const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:18px;';
+  [['Как потратить?','При покупке цветов или подарков — до 75% суммы'],
+   ['Сколько могу потратить?','До 75% от суммы заказа. С каждым заказом кэшбек растёт!']
+  ].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
   d.appendChild(qs);
-  const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=8;render();}});b.textContent='Супер! 👍';d.appendChild(b);return d;
+  const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
+  btn.textContent='Супер! 👍';
+  btn.addEventListener('click',()=>{S.obStep=8;render();});  // → 8 Buds
+  d.appendChild(btn);
+  return d;
 }
-function obBuds(){
+
+/* 8 — Бутоны */
+function ob8(){
   const d=obWrap([]);
-  d.appendChild(el('div',{css:'font-size:52px;margin-bottom:14px;'},['🌹']));
-  d.appendChild(el('div',{cls:'ob-title'},['Бутоны 🌹']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Получаете за приглашённых друзей.\nМожно вывести деньгами (СБП)\nили потратить на покупки!']));
-  d.appendChild(el('div',{css:'background:rgba(255,55,95,.1);border:1.5px solid rgba(255,55,95,.4);border-radius:20px;padding:20px;text-align:center;margin-bottom:22px;width:100%;box-shadow:inset 0 1px 0 rgba(255,55,95,.2);'},
-    [el('div',{css:'font-size:18px;font-weight:800;color:#ff375f;'},['За каждого пользователя:']),el('div',{css:'font-size:28px;font-weight:900;color:#ff375f;margin-top:4px;'},['от 1000 РУБЛЕЙ'])]));
-  const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.obStep=8;render();}});b.textContent='Круто! 🚀';d.appendChild(b);return d;
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(7));
+  d.appendChild(obHeader('🌹','Бутоны 🌹','Получаете за приглашённых друзей.\nМожно вывести деньгами или потратить!'));
+  const card=document.createElement('div');
+  card.style.cssText='background:rgba(255,55,95,.1);border:1.5px solid rgba(255,55,95,.4);border-radius:20px;padding:20px;text-align:center;margin-bottom:22px;width:100%;box-shadow:inset 0 1px 0 rgba(255,55,95,.2);';
+  card.innerHTML='<div style="font-size:18px;font-weight:800;color:#ff375f;">За каждого пользователя:</div><div style="font-size:28px;font-weight:900;color:#ff375f;margin-top:4px;">от 1000 РУБЛЕЙ</div>';
+  d.appendChild(card);
+  const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
+  btn.textContent='Круто! 🚀';
+  btn.addEventListener('click',()=>{S.obStep=9;render();});  // → 9 Exchange
+  d.appendChild(btn);
+  return d;
 }
-function obExchange(){
+
+/* 9 — Обмен + ФИНИШ */
+function ob9(){
   const d=obWrap([]);
-  d.appendChild(el('div',{css:'font-size:52px;margin-bottom:14px;'},['🔄']));
-  d.appendChild(el('div',{cls:'ob-title'},['Система обмена']));
-  d.appendChild(el('div',{cls:'ob-sub',css:'margin-bottom:18px;'},['Бутоны можно обменять\nна лепестки или рубли']));
-  const qs=el('div',{cls:'list-sec',css:'width:100%;margin-bottom:22px;'});
+  d.style.justifyContent='flex-start';
+  d.style.paddingTop='calc(80px + env(safe-area-inset-top,0px))';
+  d.appendChild(obBackBtn(8));
+  d.appendChild(obHeader('🔄','Система обмена','Бутоны можно обменять\nна лепестки или рубли'));
+  const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:22px;';
   [['🌹 → ☘️ Бутоны в лепестки','Курс 3:1 — 3 бутона = 1 лепесток'],
-   ['🌹 → 💰 Бутоны в рубли','Курс 2:1 — 2 бутона = 1 рубль\nВывод через СБП']].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
+   ['🌹 → 💰 Бутоны в рубли','Курс 2:1 — 2 бутона = 1 рубль. Вывод через СБП']
+  ].forEach(([q,a])=>qs.appendChild(buildFAQ(q,a)));
   d.appendChild(qs);
-  const b=el('button',{cls:'btn-prim',css:'width:100%;',onClick:()=>{
+  const btn=document.createElement('button');btn.className='btn-prim';btn.style.width='100%';
+  btn.textContent='Я всё понял! ✅';
+  btn.addEventListener('click',()=>{
+    // ── ФИНИШ — создаём пользователя ──
     const promoBonus=S.obPromo&&VALID_PROMOS[S.obPromo]?VALID_PROMOS[S.obPromo].bonus:0;
     const spinBonus=(!S.obPromo&&S.spinResult)?S.spinResult.v:0;
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const mkCode=()=>{let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];return r;};
     S.user={
-      name:S.obName||'Пользователь',phone:S.obPhone||'+79001234567',
-      addr:S.obAddr||'',floor:S.obFloor,apt:S.obApt,entr:S.obEntr,intercom:S.obIntercom,
-      petals:1000+promoBonus+spinBonus,buds:0,rubles:0,referred:0,
-      refCode:'VNT'+Math.random().toString(36).slice(2,8).toUpperCase(),
-      promoCode:(()=>{const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];return r;})(),
-      addresses:[{street:S.obAddr||'',intercom:S.obIntercom||'',entr:S.obEntr||'',floor:S.obFloor||'',apt:S.obApt||'',note:'',expanded:false}]
+      name:S.obName||'Пользователь',
+      phone:S.obPhone||'',
+      addr:S.obAddr||'',
+      floor:S.obFloor||'',apt:S.obApt||'',entr:S.obEntr||'',intercom:S.obIntercom||'',
+      petals:1000+promoBonus+spinBonus,
+      buds:0,rubles:0,referred:0,
+      promoCode:mkCode(),
+      addresses:[{
+        street:S.obAddr||'',intercom:S.obIntercom||'',
+        entr:S.obEntr||'',floor:S.obFloor||'',apt:S.obApt||'',note:'',expanded:false
+      }]
     };
-    S.onboard=false;save();showNotif('Добро пожаловать, '+S.user.name+'! 🌸');render();
-  }});
-  b.textContent='Я всё понял! ✅';d.appendChild(b);return d;
+    S.onboard=false;
+    // Сброс onboarding состояния
+    S.obStep=0;S.obName='';S.obPhone='';S.obAddr='';
+    S.obFloor='';S.obApt='';S.obEntr='';S.obIntercom='';
+    S.obPromo='';S.spinResult=null;S.spun=false;
+    save();
+    showNotif('Добро пожаловать, '+S.user.name+'! 🌸');
+    render();
+  });
+  d.appendChild(btn);
+  return d;
 }
 
 // ══════════════════════════════════════════

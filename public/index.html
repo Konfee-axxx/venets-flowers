@@ -247,7 +247,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 .detail-foot{position:sticky;bottom:0;background:rgba(0,0,8,.9);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-top:0.5px solid var(--border);padding:14px 18px calc(14px + var(--safe-b));display:flex;align-items:center;gap:14px;}
 
 /* ═══ ОНБОРДИНГ ═══ */
-.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;animation:fdIn .3s ease;}
+.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px 40px;animation:fdIn .3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .ob-emoji{font-size:58px;margin-bottom:16px;animation:float 3s ease-in-out infinite;}
 .ob-title{font-size:26px;font-weight:800;text-align:center;line-height:1.25;margin-bottom:10px;}
 .ob-sub{font-size:14px;color:var(--txt2);text-align:center;line-height:1.65;margin-bottom:24px;}
@@ -1643,9 +1643,19 @@ function buildProfile(){
     ri.appendChild(el('div',{cls:'list-ic'},['✨']));ri.appendChild(el('div',{cls:'list-lbl',css:'color:var(--accent);font-weight:700;'},['Зарегистрироваться']));ri.appendChild(el('div',{cls:'list-arr'},['›']));
     sec.appendChild(ri);
     ['📦 Мои заказы','☘️ Баллы','🎫 Промокод'].forEach(lb=>{const r=el('div',{cls:'list-row dis'});r.appendChild(el('span',{},[lb]));sec.appendChild(r);});
-    ['🚚 Доставка','🕐 Время работы','🌸 О нас','🤝 Сотрудничество','🆘 Поддержка'].forEach(lb=>{
-      const r=el('div',{cls:'list-row'});r.appendChild(el('span',{css:'font-size:15px;font-weight:500;'},[lb]));sec.appendChild(r);
+    [['🚚','Доставка','delivery'],['🕐','Время работы','hours'],['🌸','О нас','about'],['🤝','Сотрудничество','collab']].forEach(([ic,lb,k])=>{
+      const r=el('div',{cls:'list-row',onClick:()=>{S.profSec=k;render();}});
+      r.appendChild(el('div',{cls:'list-ic'},[ic]));
+      r.appendChild(el('div',{cls:'list-lbl'},[lb]));
+      r.appendChild(el('div',{cls:'list-arr'},['›']));
+      sec.appendChild(r);
     });
+    // Поддержка — неактивна до регистрации
+    const suppR=el('div',{cls:'list-row',css:'opacity:0.4;cursor:default;'});
+    suppR.appendChild(el('div',{cls:'list-ic'},['🆘']));
+    suppR.appendChild(el('div',{cls:'list-lbl'},['Поддержка']));
+    suppR.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);'},['Войдите чтобы написать']));
+    sec.appendChild(suppR);
     scr.appendChild(sec);
   }
   const ab=el('button',{css:'margin:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 28px);',onClick:()=>{S.adminLogin=true;render();}});
@@ -2014,22 +2024,16 @@ function buildChatDialog(page){
 
 /* ── общий wrapper ── */
 function obWrap(content_nodes){
-  // Внешний div — position:fixed, overflow:scroll (из CSS .onboard)
-  const outer=document.createElement('div');
-  outer.className='onboard';
-  // Внутренний div — flex column, занимает минимум весь экран
   const d=document.createElement('div');
-  d.style.cssText='display:flex;flex-direction:column;align-items:center;min-height:100vh;width:100%;padding:calc(env(safe-area-inset-top,16px) + 52px) 18px calc(env(safe-area-inset-bottom,16px) + 20px);box-sizing:border-box;position:relative;';
+  d.className='onboard';
   content_nodes.forEach(n=>{if(n)d.appendChild(typeof n==='string'?document.createTextNode(n):n);});
-  outer.appendChild(d);
-  return outer;
+  return d;
 }
 
 /* ── кнопка назад (верхний левый угол) ── */
 function obBackBtn(targetStep){
   const btn=document.createElement('button');
-  // position:fixed -- всегда в левом верхнем углу независимо от скролла
-  btn.style.cssText='position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:16px;background:rgba(10,10,22,.85);border:1px solid rgba(255,255,255,.18);border-radius:50%;width:40px;height:40px;color:var(--txt);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:700;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.15);';
+  btn.style.cssText='position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:16px;z-index:650;background:rgba(10,10,22,.9);border:1px solid rgba(255,255,255,.18);border-radius:50%;width:40px;height:40px;color:var(--txt);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.12);line-height:1;';
   btn.textContent='←';
   btn.addEventListener('click',()=>{S.obStep=targetStep;render();});
   return btn;
@@ -2108,9 +2112,9 @@ function ob2(){
       const r=await fetch('/api/send-code',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({phone:S.obPhone})});
-      const d=await r.json();
-      if(d.ok){
-        if(d.devCode)S._devCode=d.devCode; // dev режим
+      const resp=await r.json();
+      if(resp.ok){
+        S._inlineCode=resp.code||null; // код для показа если TG не отправил
         S.obStep=3;render();
       }
       else{showNotif('Ошибка отправки кода','❌');cont.disabled=false;cont.textContent='Получить код →';}
@@ -2151,75 +2155,95 @@ function ob2(){
 /* 2v — Подтверждение телефона */
 function ob2v(){
   const d=obWrap([]);
-  d.firstChild.appendChild(obBackBtn(2));
-  const header=obHeader('📲','Код подтверждения','Введите код из Telegram на номер '+S.obPhone);
-  d.firstChild.appendChild(header);
+  d.appendChild(obBackBtn(2));
+  d.appendChild(obHeader('📲','Код подтверждения','Код отправлен в Telegram на номер '+S.obPhone));
+
+  // Показываем inline код если TG не смог отправить напрямую
+  if(S._inlineCode){
+    const hint=document.createElement('div');
+    hint.style.cssText='background:rgba(191,90,242,.12);border:1.5px solid rgba(191,90,242,.4);border-radius:18px;padding:16px 20px;text-align:center;margin-bottom:18px;width:100%;box-sizing:border-box;';
+    hint.innerHTML='<div style="font-size:12px;color:var(--txt2);margin-bottom:6px;">Ваш код подтверждения:</div><div style="font-size:36px;font-weight:900;color:var(--accent);letter-spacing:8px;">'+S._inlineCode+'</div><div style="font-size:11px;color:var(--txt3);margin-top:6px;">Действует 10 минут</div>';
+    d.appendChild(hint);
+  }
 
   const boxes=[];
   const statusMsg=document.createElement('div');
   statusMsg.style.cssText='font-size:13px;color:var(--txt2);text-align:center;margin-bottom:8px;min-height:18px;';
 
   const cont=document.createElement('button');cont.className='btn-prim';
-  cont.style.cssText='width:100%;margin-top:20px;display:none;';
+  cont.style.cssText='width:100%;margin-top:16px;display:none;';
   cont.textContent='Подтвердить →';
   cont.addEventListener('click',async()=>{
     const code=boxes.map(b=>b.value).join('');
+    // Если есть inline код — проверяем локально
+    if(S._inlineCode){
+      if(code===S._inlineCode){
+        S._inlineCode=null;S.obStep=4;render();
+        return;
+      } else {
+        boxes.forEach(b=>{b.style.borderColor='var(--pink)';});
+        statusMsg.style.color='var(--pink)';
+        statusMsg.textContent='Неверный код, попробуйте ещё раз';
+        setTimeout(()=>{boxes.forEach(b=>{b.style.borderColor=b.value?'var(--green)':'rgba(255,255,255,.2)';});statusMsg.textContent='';},2000);
+        return;
+      }
+    }
+    // Иначе проверяем через API
     cont.disabled=true;cont.textContent='Проверяем...';
     try{
       const r=await fetch('/api/verify-code',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({phone:S.obPhone,code})});
-      const d=await r.json();
-      if(d.ok){S.obStep=4;render();}
+      const resp=await r.json();
+      if(resp.ok){S.obStep=4;render();}
       else{
         boxes.forEach(b=>{b.style.borderColor='var(--pink)';});
         statusMsg.style.color='var(--pink)';
-        statusMsg.textContent='Неверный код, попробуйте ещё раз';
+        statusMsg.textContent='Неверный код. Попробуйте ещё раз.';
         cont.disabled=false;cont.textContent='Подтвердить →';
       }
-    }catch(e){S.obStep=4;render();}  // fallback
+    }catch(e){
+      // Fallback при ошибке сети
+      S.obStep=4;render();
+    }
   });
 
   const row=document.createElement('div');
   row.style.cssText='display:flex;gap:10px;justify-content:center;';
   for(let i=0;i<5;i++){
-    const idx=i;
+    const idx2=i;
     const box=document.createElement('input');
-    box.maxLength=1;box.setAttribute('inputmode','numeric');box.setAttribute('type','tel');
-    box.style.cssText='width:52px;height:60px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:22px;font-weight:800;text-align:center;color:var(--txt);outline:none;transition:border-color .2s;-webkit-appearance:none;';
+    box.maxLength=1;box.setAttribute('inputmode','numeric');box.type='tel';
+    box.style.cssText='width:48px;height:56px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:22px;font-weight:800;text-align:center;color:var(--txt);outline:none;transition:border-color .2s;-webkit-appearance:none;';
     boxes.push(box);row.appendChild(box);
     box.addEventListener('input',()=>{
       box.value=box.value.replace(/[^0-9]/g,'').slice(0,1);
-      if(box.value){box.style.borderColor='var(--green)';}
-      else{box.style.borderColor='rgba(255,255,255,.2)';}
-      boxes.forEach(b=>{b.style.borderColor=b.value?'var(--green)':'rgba(255,255,255,.2)';});
-      if(box.value&&idx<4)boxes[idx+1].focus();
+      box.style.borderColor=box.value?'var(--green)':'rgba(255,255,255,.2)';
+      if(box.value&&idx2<4)boxes[idx2+1].focus();
       cont.style.display=boxes.every(b=>b.value)?'block':'none';
     });
     box.addEventListener('keydown',(e)=>{
-      if(e.key==='Backspace'&&!box.value&&idx>0)boxes[idx-1].focus();
+      if(e.key==='Backspace'&&!box.value&&idx2>0)boxes[idx2-1].focus();
     });
   }
 
   const resend=document.createElement('button');
-  resend.style.cssText='background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:10px;margin-top:8px;';
-  resend.textContent='Отправить код повторно';
+  resend.style.cssText='background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:10px;margin-top:4px;';
+  resend.textContent='Отправить повторно';
   resend.addEventListener('click',async()=>{
-    resend.disabled=true;resend.style.opacity='0.5';
-    try{await fetch('/api/send-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:S.obPhone})});}catch(e){}
-    statusMsg.textContent='Код отправлен повторно';
-    setTimeout(()=>{resend.disabled=false;resend.style.opacity='1';},30000);
+    resend.disabled=true;resend.textContent='Отправляем...';
+    try{
+      const r=await fetch('/api/send-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:S.obPhone})});
+      const resp=await r.json();
+      if(resp.ok){S._inlineCode=resp.code||null;render();}
+    }catch(e){}
+    setTimeout(()=>{resend.disabled=false;resend.textContent='Отправить повторно';},30000);
   });
 
-  d.firstChild.appendChild(row);
-  d.firstChild.appendChild(statusMsg);
-  d.firstChild.appendChild(cont);
-  d.firstChild.appendChild(resend);
-
-  setTimeout(()=>boxes[0]?.focus(),100);
+  d.appendChild(row);d.appendChild(statusMsg);d.appendChild(cont);d.appendChild(resend);
+  setTimeout(()=>boxes[0]?.focus(),150);
   return d;
 }
-
 
 /* 3 — Адрес */
 function ob3(){

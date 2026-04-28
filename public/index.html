@@ -247,7 +247,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 .detail-foot{position:sticky;bottom:0;background:rgba(0,0,8,.9);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-top:0.5px solid var(--border);padding:14px 18px calc(14px + var(--safe-b));display:flex;align-items:center;gap:14px;}
 
 /* ═══ ОНБОРДИНГ ═══ */
-.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:0 20px calc(20px + var(--safe-b));animation:fdIn .3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.onboard{position:fixed;inset:0;z-index:600;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;animation:fdIn .3s ease;}
 .ob-emoji{font-size:58px;margin-bottom:16px;animation:float 3s ease-in-out infinite;}
 .ob-title{font-size:26px;font-weight:800;text-align:center;line-height:1.25;margin-bottom:10px;}
 .ob-sub{font-size:14px;color:var(--txt2);text-align:center;line-height:1.65;margin-bottom:24px;}
@@ -2014,17 +2014,22 @@ function buildChatDialog(page){
 
 /* ── общий wrapper ── */
 function obWrap(content_nodes){
+  // Внешний div — position:fixed, overflow:scroll (из CSS .onboard)
+  const outer=document.createElement('div');
+  outer.className='onboard';
+  // Внутренний div — flex column, занимает минимум весь экран
   const d=document.createElement('div');
-  d.className='onboard';
-  d.style.cssText='display:flex;flex-direction:column;align-items:center;min-height:100%;width:100%;position:relative;padding:calc(env(safe-area-inset-top,0px) + 56px) 0 calc(env(safe-area-inset-bottom,0px) + 20px);box-sizing:border-box;';
+  d.style.cssText='display:flex;flex-direction:column;align-items:center;min-height:100vh;width:100%;padding:calc(env(safe-area-inset-top,16px) + 52px) 18px calc(env(safe-area-inset-bottom,16px) + 20px);box-sizing:border-box;position:relative;';
   content_nodes.forEach(n=>{if(n)d.appendChild(typeof n==='string'?document.createTextNode(n):n);});
-  return d;
+  outer.appendChild(d);
+  return outer;
 }
 
 /* ── кнопка назад (верхний левый угол) ── */
 function obBackBtn(targetStep){
   const btn=document.createElement('button');
-  btn.style.cssText='position:absolute;top:calc(16px + env(safe-area-inset-top,0px));left:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:50%;width:38px;height:38px;color:var(--txt);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.15);';
+  // position:fixed -- всегда в левом верхнем углу независимо от скролла
+  btn.style.cssText='position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:16px;background:rgba(10,10,22,.85);border:1px solid rgba(255,255,255,.18);border-radius:50%;width:40px;height:40px;color:var(--txt);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:700;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.15);';
   btn.textContent='←';
   btn.addEventListener('click',()=>{S.obStep=targetStep;render();});
   return btn;
@@ -2046,7 +2051,7 @@ function obHeader(emoji, title, sub){
 }
 
 function buildOnboard(){
-  const steps=[ob0,ob1,ob2,ob3,ob4,ob5,ob6,ob7,ob8,ob9];
+  const steps=[ob0,ob1,ob2,ob2v,ob3,ob4,ob5,ob6,ob7,ob8,ob9];
   const fn=steps[S.obStep]||ob0;
   return fn();
 }
@@ -2054,7 +2059,6 @@ function buildOnboard(){
 /* 0 — Welcome */
 function ob0(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obHeader('🌸','Добро пожаловать\nв Venets Flowers','Цветы и подарки\nс доставкой по Москве'));
   const btn=document.createElement('button');btn.className='btn-glass';btn.style.width='100%';
   btn.textContent='Начать →';btn.addEventListener('click',()=>{S.obStep=1;render();});
@@ -2065,7 +2069,6 @@ function ob0(){
 /* 1 — Имя */
 function ob1(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(0));
   d.appendChild(obHeader('👤','Как вас зовут?',null));
   const inp=document.createElement('input');inp.className='inp';
@@ -2089,7 +2092,6 @@ function ob1(){
 /* 2 — Телефон */
 function ob2(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(1));
   d.appendChild(obHeader('📱','Ваш телефон','Актуальный номер — для связи по заказу'));
 
@@ -2098,8 +2100,24 @@ function ob2(){
   const cont=document.createElement('button');cont.className='btn-glass';
   cont.style.cssText='width:100%;margin-top:22px;display:none;';
   cont.textContent='Продолжить →';
-  cont.addEventListener('click',()=>{
-    S.obPhone='+7'+boxes.map(b=>b.value).join('');S.obStep=3;render();
+  cont.addEventListener('click',async()=>{
+    S.obPhone='+7'+boxes.map(b=>b.value).join('');
+    // Отправляем код подтверждения
+    cont.disabled=true;cont.textContent='Отправляем...';
+    try{
+      const r=await fetch('/api/send-code',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({phone:S.obPhone})});
+      const d=await r.json();
+      if(d.ok){
+        if(d.devCode)S._devCode=d.devCode; // dev режим
+        S.obStep=3;render();
+      }
+      else{showNotif('Ошибка отправки кода','❌');cont.disabled=false;cont.textContent='Получить код →';}
+    }catch(e){
+      // Fallback: без верификации если API недоступен
+      S.obStep=3;render();
+    }
   });
 
   const phoneRow=document.createElement('div');
@@ -2130,11 +2148,83 @@ function ob2(){
   return d;
 }
 
+/* 2v — Подтверждение телефона */
+function ob2v(){
+  const d=obWrap([]);
+  d.firstChild.appendChild(obBackBtn(2));
+  const header=obHeader('📲','Код подтверждения','Введите код из Telegram на номер '+S.obPhone);
+  d.firstChild.appendChild(header);
+
+  const boxes=[];
+  const statusMsg=document.createElement('div');
+  statusMsg.style.cssText='font-size:13px;color:var(--txt2);text-align:center;margin-bottom:8px;min-height:18px;';
+
+  const cont=document.createElement('button');cont.className='btn-prim';
+  cont.style.cssText='width:100%;margin-top:20px;display:none;';
+  cont.textContent='Подтвердить →';
+  cont.addEventListener('click',async()=>{
+    const code=boxes.map(b=>b.value).join('');
+    cont.disabled=true;cont.textContent='Проверяем...';
+    try{
+      const r=await fetch('/api/verify-code',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({phone:S.obPhone,code})});
+      const d=await r.json();
+      if(d.ok){S.obStep=4;render();}
+      else{
+        boxes.forEach(b=>{b.style.borderColor='var(--pink)';});
+        statusMsg.style.color='var(--pink)';
+        statusMsg.textContent='Неверный код, попробуйте ещё раз';
+        cont.disabled=false;cont.textContent='Подтвердить →';
+      }
+    }catch(e){S.obStep=4;render();}  // fallback
+  });
+
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:10px;justify-content:center;';
+  for(let i=0;i<5;i++){
+    const idx=i;
+    const box=document.createElement('input');
+    box.maxLength=1;box.setAttribute('inputmode','numeric');box.setAttribute('type','tel');
+    box.style.cssText='width:52px;height:60px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:22px;font-weight:800;text-align:center;color:var(--txt);outline:none;transition:border-color .2s;-webkit-appearance:none;';
+    boxes.push(box);row.appendChild(box);
+    box.addEventListener('input',()=>{
+      box.value=box.value.replace(/[^0-9]/g,'').slice(0,1);
+      if(box.value){box.style.borderColor='var(--green)';}
+      else{box.style.borderColor='rgba(255,255,255,.2)';}
+      boxes.forEach(b=>{b.style.borderColor=b.value?'var(--green)':'rgba(255,255,255,.2)';});
+      if(box.value&&idx<4)boxes[idx+1].focus();
+      cont.style.display=boxes.every(b=>b.value)?'block':'none';
+    });
+    box.addEventListener('keydown',(e)=>{
+      if(e.key==='Backspace'&&!box.value&&idx>0)boxes[idx-1].focus();
+    });
+  }
+
+  const resend=document.createElement('button');
+  resend.style.cssText='background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:10px;margin-top:8px;';
+  resend.textContent='Отправить код повторно';
+  resend.addEventListener('click',async()=>{
+    resend.disabled=true;resend.style.opacity='0.5';
+    try{await fetch('/api/send-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:S.obPhone})});}catch(e){}
+    statusMsg.textContent='Код отправлен повторно';
+    setTimeout(()=>{resend.disabled=false;resend.style.opacity='1';},30000);
+  });
+
+  d.firstChild.appendChild(row);
+  d.firstChild.appendChild(statusMsg);
+  d.firstChild.appendChild(cont);
+  d.firstChild.appendChild(resend);
+
+  setTimeout(()=>boxes[0]?.focus(),100);
+  return d;
+}
+
+
 /* 3 — Адрес */
 function ob3(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
-  d.appendChild(obBackBtn(2));
+  d.appendChild(obBackBtn(3));
   d.appendChild(obHeader('📍','Адрес доставки','Улица и дом, куда привезём цветы'));
 
   const wrap=document.createElement('div');wrap.style.cssText='position:relative;width:100%;';
@@ -2160,7 +2250,6 @@ function ob3(){
 /* 4 — Детали доставки */
 function ob4(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(3));
   d.appendChild(obHeader(null,'Детали доставки',null));
 
@@ -2190,7 +2279,6 @@ function ob4(){
 /* 5 — Промокод */
 function ob5(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(4));
   d.appendChild(obHeader('🎫','Промокод','Если есть промокод — введите ниже'));
 
@@ -2266,7 +2354,6 @@ function ob6(){
 function ob6_promoSuccess(){
   const promo=VALID_PROMOS[S.obPromo]||{bonus:1000};
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   const check=document.createElement('div');
   check.style.cssText='width:80px;height:80px;border-radius:50%;background:rgba(48,209,88,.15);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px;';
   check.textContent='✅';
@@ -2282,7 +2369,6 @@ function ob6_promoSuccess(){
 
 function ob6_roulette(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 48px)';
 
   const title=document.createElement('div');title.className='ob-title';title.textContent='Скидка на первый заказ';
   const sub=document.createElement('div');sub.className='ob-sub';sub.style.marginBottom='16px';sub.textContent='Крути рулетку и узнай свою скидку!';
@@ -2339,7 +2425,6 @@ function ob6_roulette(){
 /* 7 — Лепестки */
 function ob7(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(6));
   d.appendChild(obHeader('☘️','Лепестки ☘️','Получаете за покупки у нас.\nЧем больше покупок — тем выше кэшбек!'));
   const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:18px;';
@@ -2357,7 +2442,6 @@ function ob7(){
 /* 8 — Бутоны */
 function ob8(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(7));
   d.appendChild(obHeader('🌹','Бутоны 🌹','Получаете за приглашённых друзей.\nМожно вывести деньгами или потратить!'));
   const card=document.createElement('div');
@@ -2374,7 +2458,6 @@ function ob8(){
 /* 9 — Обмен + ФИНИШ */
 function ob9(){
   const d=obWrap([]);
-  d.style.paddingTop='calc(env(safe-area-inset-top,20px) + 56px)';
   d.appendChild(obBackBtn(8));
   d.appendChild(obHeader('🔄','Система обмена','Бутоны можно обменять\nна лепестки или рубли'));
   const qs=document.createElement('div');qs.className='list-sec';qs.style.cssText='width:100%;margin-bottom:22px;';
@@ -2822,6 +2905,9 @@ function buildAdminCatalog(scr){
       Object.entries(inputs).forEach(([k,inp])=>{if(inp.value)item[k]=isNaN(inp.value)?inp.value:+inp.value;});
       item.tags=tagI.value.split(',').map(t=>t.trim()).filter(Boolean);
       addLog('Изменён товар: '+(item.name||flName(item)),'');
+      // Синхронизируем каталог с сервером
+      fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'set',flowers:FLOWERS,gifts:GIFTS})}).catch(()=>{});
       save();showNotif('Сохранено ✅');render();
     }});sv.textContent='Сохранить';scr.appendChild(sv);
     const del=el('button',{css:'width:100%;margin-top:10px;padding:14px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:14px;font-weight:600;cursor:pointer;',
@@ -2973,6 +3059,19 @@ function buildAdminChats(scr){
     }
     // НЕ восстанавливаем автоматически — только показываем диалог через таблетку
     // S.checkout = saved; // не делаем — пользователь сам решит через таблетку
+  }catch(e){}
+})();
+
+// Загружаем каталог с сервера (чтобы все видели одинаковый)
+(async function loadCatalog(){
+  try{
+    const r=await fetch('/api/catalog',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'get'})});
+    const d=await r.json();
+    if(d.flowers&&d.flowers.length)FLOWERS=d.flowers;
+    if(d.gifts&&d.gifts.length)GIFTS=d.gifts;
+    render(); // перерисовываем с актуальным каталогом
   }catch(e){}
 })();
 

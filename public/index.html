@@ -2054,6 +2054,27 @@ function obHeader(emoji, title, sub){
   return topSec;
 }
 
+function buildFAQ(question, answer){
+  let open=false;
+  const item=document.createElement('div');item.className='faq-item';
+  const btn=document.createElement('button');btn.className='faq-q';
+  btn.appendChild(Object.assign(document.createElement('span'),{textContent:question}));
+  const arr=document.createElement('span');arr.className='faq-arr';arr.textContent='›';
+  btn.appendChild(arr);
+  const body=document.createElement('div');body.className='faq-body';
+  const txt=document.createElement('div');txt.className='faq-txt';
+  txt.textContent=answer;
+  body.appendChild(txt);
+  btn.addEventListener('click',()=>{
+    open=!open;
+    body.classList.toggle('open',open);
+    arr.classList.toggle('open',open);
+  });
+  item.appendChild(btn);item.appendChild(body);
+  return item;
+}
+
+
 function buildOnboard(){
   const steps=[ob0,ob1,ob2,ob3,ob4,ob5,ob6,ob7,ob8,ob9];
   const fn=steps[S.obStep]||ob0;

@@ -2248,13 +2248,29 @@ function ob5(){
   const cont=document.createElement('button');cont.className='btn-prim';
   cont.style.cssText='width:100%;margin-top:20px;display:none;';
   cont.textContent='Применить →';
-  cont.addEventListener('click',()=>{
+  cont.addEventListener('click',async()=>{
     const code=boxes.map(b=>b.value.toUpperCase()).join('');
     const promo=VALID_PROMOS[code];
-    if(promo){S.obPromo=code;S.obPromoBonus=promo.bonus;S.obStep=6;render();}
+    if(promo){S.obPromo=code;S.obPromoBonus=promo.bonus;S.obIsReferral=false;S.obStep=6;render();}
     else{
-      boxes.forEach(b=>{b.style.borderColor='var(--pink)';b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';});
-      promoError=true;showNotif('Такого промокода нет :(','❌');
+      // Проверяем — может это реферальный код другого пользователя (через KV)
+      cont.disabled=true;cont.textContent='Проверяем...';
+      let isRef=false;
+      try{
+        const r=await fetch('/api/referral',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'check',code})});
+        const d=await r.json();
+        if(d.ok&&d.valid){
+          S.obPromo=code;S.obPromoBonus=1000;S.obIsReferral=true;S.obReferrerCode=code;
+          S.obStep=6;render();isRef=true;
+        }
+      }catch(e){}
+      if(!isRef){
+        cont.disabled=false;cont.textContent='Применить →';
+        boxes.forEach(b=>{b.style.borderColor='var(--pink)';b.style.boxShadow='0 0 0 2px rgba(255,55,95,.25)';});
+        promoError=true;showNotif('Такого промокода нет :(','❌');
+      }
     }
   });
 
@@ -2307,7 +2323,7 @@ function ob5(){
 
 /* 6 — Рулетка ИЛИ PromoSuccess */
 function ob6(){
-  if(S.obPromo&&VALID_PROMOS[S.obPromo]) return ob6_promoSuccess();
+  if(S.obPromo&&(VALID_PROMOS[S.obPromo]||S.obIsReferral)) return ob6_promoSuccess();
   return ob6_roulette();
 }
 
@@ -2427,9 +2443,10 @@ function ob9(){
   d.appendChild(qs);
   const btn=document.createElement('button');btn.className='btn-prim';btn.style.width='100%';
   btn.textContent='Я всё понял! ✅';
-  btn.addEventListener('click',()=>{
+  btn.addEventListener('click',async()=>{
     // ── ФИНИШ — создаём пользователя ──
-    const promoBonus=S.obPromo&&VALID_PROMOS[S.obPromo]?VALID_PROMOS[S.obPromo].bonus:0;
+    const isReferral=S.obIsReferral&&S.obReferrerCode;
+    const promoBonus=isReferral?1000:(S.obPromo&&VALID_PROMOS[S.obPromo]?VALID_PROMOS[S.obPromo].bonus:0);
     const spinBonus=(!S.obPromo&&S.spinResult)?S.spinResult.v:0;
     const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const mkCode=()=>{let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];return r;};
@@ -2441,16 +2458,32 @@ function ob9(){
       petals:1000+promoBonus+spinBonus,
       buds:0,rubles:0,referred:0,
       promoCode:mkCode(),
+      usedReferral:isReferral?S.obReferrerCode:'',
       addresses:[{
         street:S.obAddr||'',intercom:S.obIntercom||'',
         entr:S.obEntr||'',floor:S.obFloor||'',apt:S.obApt||'',note:'',expanded:false
       }]
     };
     S.onboard=false;
+    // Реферальная система: уведомляем пригласившего
+    if(isReferral&&S.obReferrerCode){
+      try{
+        await fetch('/api/referral',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'use',code:S.obReferrerCode,newUserName:S.user.name})});
+      }catch(e){}
+    }
+    // Регистрируем собственный реферальный код в KV (чтобы друзья могли его использовать)
+    try{
+      const tgId=getTgId();
+      await fetch('/api/referral',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'register',code:S.user.promoCode,tgId,name:S.user.name})});
+    }catch(e){}
     // Сброс onboarding состояния
     S.obStep=0;S.obName='';S.obPhone='';S.obAddr='';
     S.obFloor='';S.obApt='';S.obEntr='';S.obIntercom='';
-    S.obPromo='';S.spinResult=null;S.spun=false;
+    S.obPromo='';S.obIsReferral=false;S.obReferrerCode='';S.spinResult=null;S.spun=false;
     save();
     showNotif('Добро пожаловать, '+S.user.name+'! 🌸');
     render();
@@ -2995,6 +3028,118 @@ function buildAdminChats(scr){
     }
   }catch(e){}
 })();
+
+// ══════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ранее отсутствовали)
+// ══════════════════════════════════════════
+
+// Уведомление админа через API (poll)
+async function notifyAdmin(body){
+  try{
+    await fetch('/api/poll',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+  }catch(e){console.error('notifyAdmin err:',e.message);}
+}
+
+// Псевдоним для обратной совместимости
+async function apiCall(body){
+  return notifyAdmin(body);
+}
+
+// Диалог возобновления незавершённого заказа
+function showResumeOrderDialog(order,savedCo){
+  S.checkout=savedCo;
+  if(savedCo.payBankId||savedCo.payBankName){
+    savedCo.payBank=BANKS.find(b=>b.id===savedCo.payBankId)||BANKS.find(b=>b.name===savedCo.payBankName)||BANKS[0];
+  }
+  render();
+}
+
+// ── Форма обмена баллов ──────────────────
+function buildExchangeForm(){
+  const wrap=document.createElement('div');
+  wrap.style.cssText='margin-top:8px;';
+
+  const sec1=document.createElement('div');
+  sec1.style.cssText='background:rgba(48,209,88,.07);border:1px solid rgba(48,209,88,.25);border-radius:20px;padding:18px;margin-bottom:12px;';
+  sec1.innerHTML='<div style="font-size:15px;font-weight:700;margin-bottom:4px;">☘️ → 🌹 Лепестки в Бутоны</div><div style="font-size:12px;color:var(--txt2);margin-bottom:12px;">Курс 3 лепестка = 1 бутон. Минимум 3 лепестка.</div>';
+  const petalsAvail=document.createElement('div');
+  petalsAvail.style.cssText='font-size:13px;color:var(--txt2);margin-bottom:8px;';
+  petalsAvail.textContent='У вас: '+(S.user.petals||0)+' ☘️';
+  sec1.appendChild(petalsAvail);
+  const inp1=document.createElement('input');inp1.className='inp';inp1.type='number';inp1.min='3';inp1.step='3';inp1.placeholder='Кол-во лепестков (кратно 3)';inp1.style.marginBottom='8px';
+  const preview1=document.createElement('div');preview1.style.cssText='font-size:12px;color:var(--green);min-height:18px;margin-bottom:8px;';
+  inp1.addEventListener('input',()=>{const v=parseInt(inp1.value)||0;preview1.textContent=v>=3?'Получите: '+Math.floor(v/3)+' 🌹 бутонов':'Минимум 3 лепестка';});
+  sec1.appendChild(inp1);sec1.appendChild(preview1);
+  const btn1=document.createElement('button');btn1.className='btn-glass';btn1.textContent='Обменять ☘️ → 🌹';
+  btn1.addEventListener('click',()=>{
+    const v=parseInt(inp1.value)||0;
+    if(v<3){showNotif('Минимум 3 лепестка','⚠️');return;}
+    if(v%3!==0){showNotif('Количество должно быть кратно 3','⚠️');return;}
+    if(v>(S.user.petals||0)){showNotif('Недостаточно лепестков','⚠️');return;}
+    const buds=Math.floor(v/3);S.user.petals-=v;S.user.buds=(S.user.buds||0)+buds;
+    save();showNotif('Обменяно! +'+buds+' 🌹','✅');inp1.value='';preview1.textContent='';
+    petalsAvail.textContent='У вас: '+(S.user.petals||0)+' ☘️';
+  });
+  sec1.appendChild(btn1);wrap.appendChild(sec1);
+
+  const sec2=document.createElement('div');
+  sec2.style.cssText='background:rgba(255,55,95,.07);border:1px solid rgba(255,55,95,.25);border-radius:20px;padding:18px;margin-bottom:12px;';
+  sec2.innerHTML='<div style="font-size:15px;font-weight:700;margin-bottom:4px;">🌹 → ☘️ Бутоны в Лепестки</div><div style="font-size:12px;color:var(--txt2);margin-bottom:12px;">Курс 1 бутон = 2 лепестка. Минимум 1 бутон.</div>';
+  const budsAvail=document.createElement('div');budsAvail.style.cssText='font-size:13px;color:var(--txt2);margin-bottom:8px;';budsAvail.textContent='У вас: '+(S.user.buds||0)+' 🌹';sec2.appendChild(budsAvail);
+  const inp2=document.createElement('input');inp2.className='inp';inp2.type='number';inp2.min='1';inp2.placeholder='Кол-во бутонов';inp2.style.marginBottom='8px';
+  const preview2=document.createElement('div');preview2.style.cssText='font-size:12px;color:var(--green);min-height:18px;margin-bottom:8px;';
+  inp2.addEventListener('input',()=>{const v=parseInt(inp2.value)||0;preview2.textContent=v>=1?'Получите: '+(v*2)+' ☘️ лепестков':'Минимум 1 бутон';});
+  sec2.appendChild(inp2);sec2.appendChild(preview2);
+  const btn2=document.createElement('button');btn2.className='btn-glass';btn2.textContent='Обменять 🌹 → ☘️';
+  btn2.addEventListener('click',()=>{
+    const v=parseInt(inp2.value)||0;
+    if(v<1){showNotif('Минимум 1 бутон','⚠️');return;}
+    if(v>(S.user.buds||0)){showNotif('Недостаточно бутонов','⚠️');return;}
+    const petals=v*2;S.user.buds-=v;S.user.petals=(S.user.petals||0)+petals;
+    save();showNotif('Обменяно! +'+petals+' ☘️','✅');inp2.value='';preview2.textContent='';
+    budsAvail.textContent='У вас: '+(S.user.buds||0)+' 🌹';
+  });
+  sec2.appendChild(btn2);wrap.appendChild(sec2);
+
+  const sec3=document.createElement('div');
+  sec3.style.cssText='background:rgba(255,214,10,.07);border:1px solid rgba(255,214,10,.3);border-radius:20px;padding:18px;';
+  sec3.innerHTML='<div style="font-size:15px;font-weight:700;margin-bottom:4px;">🌹 → 💰 Бутоны в Рубли (СБП)</div><div style="font-size:12px;color:var(--txt2);margin-bottom:12px;">Курс 2 бутона = 1 рубль. Вывод через СБП.</div>';
+  const budsAvail2=document.createElement('div');budsAvail2.style.cssText='font-size:13px;color:var(--txt2);margin-bottom:8px;';budsAvail2.textContent='У вас: '+(S.user.buds||0)+' 🌹';sec3.appendChild(budsAvail2);
+  const inp3=document.createElement('input');inp3.className='inp';inp3.type='number';inp3.min='2';inp3.step='2';inp3.placeholder='Кол-во бутонов (кратно 2)';inp3.style.marginBottom='8px';
+  const preview3=document.createElement('div');preview3.style.cssText='font-size:12px;color:var(--gold);min-height:18px;margin-bottom:8px;';
+  inp3.addEventListener('input',()=>{const v=parseInt(inp3.value)||0;preview3.textContent=v>=2?'Получите: '+Math.floor(v/2)+' ₽':'Минимум 2 бутона';});
+  sec3.appendChild(inp3);sec3.appendChild(preview3);
+  const btn3=document.createElement('button');btn3.className='btn-prim';btn3.textContent='Вывести через СБП 💰';
+  btn3.addEventListener('click',()=>{
+    const v=parseInt(inp3.value)||0;
+    if(v<2){showNotif('Минимум 2 бутона','⚠️');return;}
+    if(v%2!==0){showNotif('Кратно 2 бутонам','⚠️');return;}
+    if(v>(S.user.buds||0)){showNotif('Недостаточно бутонов','⚠️');return;}
+    const rubles=Math.floor(v/2);S.user.buds-=v;S.user.rubles=(S.user.rubles||0)+rubles;
+    save();showNotif('Заявка на '+rubles+' ₽ отправлена! Обработаем в течение 1-3 дней.','✅');
+    inp3.value='';preview3.textContent='';budsAvail2.textContent='У вас: '+(S.user.buds||0)+' 🌹';
+  });
+  sec3.appendChild(btn3);wrap.appendChild(sec3);
+  return wrap;
+}
+
+// ── Правила обмена ───────────────────────
+function buildExchangeRules(scr){
+  scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:16px;'},['📋 Правила обмена']));
+  const rules=[
+    ['☘️ Лепестки','Начисляются за покупки. Тратятся при оформлении заказа (до 75% суммы). С каждым заказом кэшбек растёт.'],
+    ['🌹 Бутоны','Начисляются за приглашённых друзей (1000 бутонов за каждого). Можно обменять на лепестки или вывести деньгами через СБП.'],
+    ['💰 Рубли','Начисляются при выводе бутонов. Выплачиваются по заявке через СБП в течение 1-3 рабочих дней.'],
+    ['Курс ☘️ → 🌹','3 лепестка = 1 бутон. Минимальная операция: 3 лепестка.'],
+    ['Курс 🌹 → ☘️','1 бутон = 2 лепестка. Минимальная операция: 1 бутон.'],
+    ['Курс 🌹 → 💰','2 бутона = 1 рубль. Минимальная операция: 2 бутона.'],
+  ];
+  const sec=el('div',{cls:'list-sec'});
+  rules.forEach(([q,a])=>sec.appendChild(buildFAQ(q,a)));
+  scr.appendChild(sec);
+}
 
 // 2) Восстанавливаем незавершённый checkout из localStorage
 (function restoreCheckout(){

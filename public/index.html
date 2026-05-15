@@ -1375,6 +1375,49 @@ function buildCO3(page){
   // Применяем начальное состояние
   updateCards();
 }
+// ══ ГЛОБАЛЬНЫЙ ПОЛЛЕР РЕКВИЗИТОВ (не привязан к DOM, переживает render()) ══
+let _reqPoller=null;
+function startReqPoller(orderId){
+  if(_reqPoller&&_reqPoller.id===String(orderId))return; // уже запущен для этого заказа
+  stopReqPoller();
+  const oid=String(orderId);
+  const timer=setInterval(async()=>{
+    // Проверяем что пользователь ещё на шаге 4
+    if(!S.checkout||S.checkout.orderId!=oid||S.checkout.step!==4){
+      stopReqPoller();return;
+    }
+    try{
+      const r=await fetch('/api/order-state',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'get_order',orderId:oid})});
+      const d=await r.json();
+      if(!d.ok||!d.state)return;
+      const st=d.state;
+      if(st.payState==='cancelled'){
+        stopReqPoller();
+        S.checkout.payStatus='fail';S.checkout.step=7;
+        saveCheckout(S.checkout);render();return;
+      }
+      if(st.payState==='requisites_sent'){
+        stopReqPoller();
+        const co=S.checkout;
+        co.payBank=BANKS.find(b=>b.id===st.payBankId)
+                 ||BANKS.find(b=>b.name===st.payBank)
+                 ||BANKS[0];
+        co.payPhone=st.payPhone||'—';
+        co.payName=st.payName||'—';
+        // Сохраняем в localStorage тоже
+        setLocalOrderState(oid,st);
+        co.step=5;saveCheckout(co);render();return;
+      }
+    }catch(e){}
+  },2500);
+  _reqPoller={id:oid,timer};
+}
+function stopReqPoller(){
+  if(_reqPoller){clearInterval(_reqPoller.timer);_reqPoller=null;}
+}
+
 function buildCO4(page){
   const co=S.checkout;
 
@@ -1412,32 +1455,6 @@ function buildCO4(page){
     }});
   }
 
-  // ── СРАЗУ проверяем — вдруг реквизиты уже есть ───────
-  const checkImmediate=()=>{
-    const st=getLocalOrderState(co.orderId);
-    if(!st)return false;
-    if(st.payState==='cancelled'){
-      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
-      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      co.payStatus='fail';co.step=7;saveCheckout(co);render();return true;
-    }
-    if(st.payState==='requisites_sent'){
-      if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
-      if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      // Безопасный поиск банка — по id, по name, или первый в списке
-      co.payBank=BANKS.find(b=>b.id===st.payBankId)
-               ||BANKS.find(b=>b.name===st.payBank)
-               ||BANKS.find(b=>b.id===st.payBank)
-               ||{id:'other',name:st.payBank||'Банк',logo:'',clr:'#888',name:st.payBank||'Банк'};
-      co.payPhone=st.payPhone||'—';
-      co.payName=st.payName||'—';
-      co.step=5;saveCheckout(co);render();return true;
-    }
-    return false;
-  };
-
-  if(checkImmediate())return;
-
   // ── Рисуем страницу ───────────────────────────────────
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
   scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:30px;'},['Готовим реквизиты']));
@@ -1446,7 +1463,7 @@ function buildCO4(page){
   msgDiv.textContent=CO_MSGS[co.msgIdx||0];scr.appendChild(msgDiv);
   page.appendChild(scr);
 
-  // ── Запускаем таймеры только если не запущены ──────
+  // ── Крутим сообщения ──────────────────────────────────
   if(!co._msgTimer){
     co._msgTimer=setInterval(()=>{
       co.msgIdx=((co.msgIdx||0)+1)%CO_MSGS.length;
@@ -1455,23 +1472,8 @@ function buildCO4(page){
     },2000);
   }
 
-  if(!co._pollTimer){
-    co._pollTimer=setInterval(async()=>{
-      // Сначала localStorage (мгновенно)
-      if(checkImmediate()){clearInterval(co._pollTimer);co._pollTimer=null;return;}
-      // Затем сервер KV (между устройствами)
-      try{
-        const r=await fetch('/api/order-state',{method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({action:'get_order',orderId:String(co.orderId)})});
-        const d=await r.json();
-        if(d.state&&d.state.payState&&d.state.payState!=='waiting_requisites'){
-          setLocalOrderState(co.orderId,d.state);
-          checkImmediate();
-        }
-      }catch(e){}
-    },2000);
-  }
+  // ── Запускаем глобальный поллер (переживает render()) ─
+  startReqPoller(co.orderId);
 }
 
 function buildCO5(page){

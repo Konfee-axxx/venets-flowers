@@ -2795,8 +2795,7 @@ function buildAdminOrders(scr){
   }
 
   // ── СПИСОК ЗАКАЗОВ
-  const allOrd=S.adminOrders.length?S.adminOrders:S.orders; ──────────────────────────────────────────────────────
-  // Таб: Текущие / Архив
+  const allOrd=S.adminOrders.length?S.adminOrders:S.orders;
   if(S._ordTab===undefined)S._ordTab=0;
   const tabRow=el('div',{css:'display:flex;gap:8px;margin-bottom:14px;'});
   [['Текущие',0],['Архив',1]].forEach(([lb,i])=>{

@@ -1,3 +1,15 @@
 {
-  "version": 2
+  "version": 2,
+  "routes": [
+    { "src": "/api/webhook",     "dest": "/api/webhook.js" },
+    { "src": "/api/poll",        "dest": "/api/poll.js" },
+    { "src": "/api/send-code",   "dest": "/api/send-code.js" },
+    { "src": "/api/verify-code", "dest": "/api/verify-code.js" },
+    { "src": "/api/order-state", "dest": "/api/order-state.js" },
+    { "src": "/api/catalog",     "dest": "/api/catalog.js" },
+    { "src": "/api/referral",    "dest": "/api/referral.js" },
+    { "src": "/api/status",      "dest": "/api/status.js" },
+    { "src": "/api/setup",       "dest": "/api/setup.js" },
+    { "src": "/(.*)",            "dest": "/index.html" }
+  ]
 }

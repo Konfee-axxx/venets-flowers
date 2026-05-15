@@ -95,9 +95,17 @@ module.exports = async function(req, res) {
   if (action === 'register_user' && userData) {
     try {
       const users = await getList('users:list');
-      const idx = users.findIndex(u => u.phone === userData.phone || (userData.tgId && u.tgId === userData.tgId));
-      if (idx >= 0) users[idx] = { ...users[idx], ...userData, _updated: Date.now() };
-      else users.push({ ...userData, _created: Date.now() });
+      // Ищем по уникальному uid (promoCode), затем по tgId, затем по телефону
+      const idx = users.findIndex(u =>
+        (userData.uid && u.uid && u.uid === userData.uid) ||
+        (userData.tgId && u.tgId && u.tgId === userData.tgId) ||
+        (userData.phone && u.phone && u.phone === userData.phone && userData.phone.length > 5)
+      );
+      if (idx >= 0) {
+        users[idx] = { ...users[idx], ...userData, _updated: Date.now() };
+      } else {
+        users.push({ ...userData, _created: Date.now() });
+      }
       await setList('users:list', users);
     } catch(e) { console.error('users KV err:', e.message); }
     return res.status(200).end(JSON.stringify({ ok: true }));

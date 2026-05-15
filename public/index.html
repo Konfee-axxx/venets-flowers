@@ -579,7 +579,7 @@ function buildRoot(){
   if(S.chatOpen){wrap.appendChild(buildChatScreen());return wrap;}
   if(S.detail){wrap.appendChild(buildDetail());return wrap;}
   if(S.profSec){wrap.appendChild(buildProfSec());return wrap;}
-  const scr=el('div',{cls:'screen'});
+  const scr=el('div',{cls:'screen',id:'main-content'});
   if(S.tab===0)scr.appendChild(buildFlowers());
   else if(S.tab===1)scr.appendChild(buildGifts());
   else scr.appendChild(buildProfile());
@@ -1419,12 +1419,16 @@ function buildCO4(page){
     if(st.payState==='cancelled'){
       if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
       if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      co.payStatus='fail';co.step=7;render();return true;
+      co.payStatus='fail';co.step=7;saveCheckout(co);render();return true;
     }
     if(st.payState==='requisites_sent'){
       if(co._pollTimer){clearInterval(co._pollTimer);co._pollTimer=null;}
       if(co._msgTimer){clearInterval(co._msgTimer);co._msgTimer=null;}
-      co.payBank=BANKS.find(b=>b.id===st.payBankId)||BANKS.find(b=>b.name===st.payBank)||BANKS[0];
+      // Безопасный поиск банка — по id, по name, или первый в списке
+      co.payBank=BANKS.find(b=>b.id===st.payBankId)
+               ||BANKS.find(b=>b.name===st.payBank)
+               ||BANKS.find(b=>b.id===st.payBank)
+               ||{id:'other',name:st.payBank||'Банк',logo:'',clr:'#888',name:st.payBank||'Банк'};
       co.payPhone=st.payPhone||'—';
       co.payName=st.payName||'—';
       co.step=5;saveCheckout(co);render();return true;
@@ -2532,6 +2536,7 @@ function ob9(){
       await fetch('/api/poll',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({action:'register_user',userData:{
+          uid:S.user.promoCode,
           name:S.user.name,phone:S.user.phone,tgId:tgId2,
           petals:S.user.petals,buds:S.user.buds,
           promoCode:S.user.promoCode,usedReferral:S.user.usedReferral||''
@@ -2547,6 +2552,13 @@ function ob9(){
   });
   d.appendChild(btn);
   return d;
+}
+
+function buildMainContent(scr){
+  scr.innerHTML='';
+  if(S.tab===0)scr.appendChild(buildFlowers());
+  else if(S.tab===1)scr.appendChild(buildGifts());
+  else scr.appendChild(buildProfile());
 }
 
 // ══════════════════════════════════════════
@@ -3313,15 +3325,34 @@ function buildExchangeRules(scr){
 
 // Загружаем каталог с сервера (чтобы все видели одинаковый)
 (async function loadCatalog(){
-  try{
-    const r=await fetch('/api/catalog',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'get'})});
-    const d=await r.json();
-    if(d.flowers&&d.flowers.length)FLOWERS=d.flowers;
-    if(d.gifts&&d.gifts.length)GIFTS=d.gifts;
-    render(); // перерисовываем с актуальным каталогом
-  }catch(e){}
+  async function fetchCatalog(){
+    try{
+      const r=await fetch('/api/catalog',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'get'})});
+      const d=await r.json();
+      let changed=false;
+      if(d.flowers&&d.flowers.length&&JSON.stringify(d.flowers)!==JSON.stringify(FLOWERS)){
+        FLOWERS=d.flowers;changed=true;
+      }
+      if(d.gifts&&d.gifts.length&&JSON.stringify(d.gifts)!==JSON.stringify(GIFTS)){
+        GIFTS=d.gifts;changed=true;
+      }
+      if(changed&&!S.checkout&&!S.onboard){
+        // Бесшовно обновляем только контент без перерисовки шапки/таббара
+        const body=document.getElementById('main-content');
+        if(body){
+          body.innerHTML='';
+          buildMainContent(body);
+        }else{
+          render();
+        }
+      }
+    }catch(e){}
+  }
+  await fetchCatalog();
+  // Проверяем обновления каталога каждые 30 секунд
+  setInterval(fetchCatalog, 30000);
 })();
 
 render();

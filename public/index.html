@@ -2638,12 +2638,21 @@ function buildAdminOrders(scr){
 
       const sendB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
         if(!nameI.value.trim()||!phoneI.value.trim()){showNotif('Заполните все поля','⚠️');return;}
+        sendB.disabled=true;sendB.textContent='Отправляем...';
         const bank=BANKS.find(b=>b.id===bankSel.value)||BANKS[0];
         const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim(),
           userTgId:o.userTgId||null, orderId:String(ordId)};
-        // Обновляем на сервере
-        setLocalOrderState(ordId, upd); // sync localStorage
-        // Обновляем локально
+        // 1. localStorage сразу
+        setLocalOrderState(ordId, upd);
+        // 2. ГЛАВНОЕ: пишем в Vercel KV — именно отсюда пользователь читает на polling
+        try{
+          await fetch('/api/order-state',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'set_order', orderId:String(ordId), data:upd})
+          });
+        }catch(e){console.error('KV write failed:',e);}
+        // 3. Обновляем локальный объект заказа
         Object.assign(o, upd);
         o.status='Ожидаем оплаты';
         addLog('Реквизиты отправлены по заказу №'+ordId,'Банк: '+bank.name);

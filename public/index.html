@@ -380,6 +380,12 @@ const VALID_PROMOS = {
 
 
 // ══════════════════════════════════════════
+// ══ TG ID владельца — авто-вход в админку без пароля ══
+const ADMIN_TG_ID = '1146926337';
+function isOwner(){
+  try{return String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'')=== ADMIN_TG_ID;}catch(e){return false;}
+}
+
 // СОСТОЯНИЕ
 // ══════════════════════════════════════════
 let S = {
@@ -392,13 +398,14 @@ let S = {
   gf:{type:'',vegan:false,halal:false,noNuts:false,minP:0,maxP:5000},
   cartOpen:false, usePetals:false,
   detail:null, profSec:null,
-  adminMode:false, adminLogin:false,
+  adminMode:isOwner(), adminLogin:false,
   adminTab:0, adminDetail:null,
+  adminOrders:[], adminUsers:[], adminChats:[],
   notif:null, _nt:null,
   checkout:null,
   chats:[], activeChat:null, chatOpen:false,
-  unreadChats:0, // непрочитанных сообщений от админа
-  _pollTimer:null,
+  unreadChats:0,
+  _pollTimer:null, _adminSyncTimer:null,
 };
 // Загрузка из localStorage — включая каталог и чаты
 try{
@@ -1398,7 +1405,10 @@ function buildCO4(page){
     notifyAdmin({action:'new_order',orderData:{
       id:order.id,total:order.total,timeSlot:order.timeSlot,
       userName:order.userName,userPhone:order.userPhone,
-      items:order.items,address:order.address
+      userTgId:order.userTgId||null,
+      items:order.items,address:order.address,
+      payState:order.payState,status:order.status,
+      date:order.date,disc:order.disc||0
     }});
   }
 
@@ -1658,8 +1668,10 @@ function buildProfile(){
     sec.appendChild(suppR);
     scr.appendChild(sec);
   }
-  const ab=el('button',{css:'margin:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 28px);',onClick:()=>{S.adminLogin=true;render();}});
-  ab.textContent='⚙️ Администратор';scr.appendChild(ab);
+  const ab=el('button',{css:'margin:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 28px);',onClick:()=>{
+    if(isOwner()){S.adminMode=true;render();}else{S.adminLogin=true;render();}
+  }});
+  ab.textContent=isOwner()?'⚙️ Панель управления':'⚙️ Администратор';scr.appendChild(ab);
   wrap.appendChild(scr);return wrap;
 }
 
@@ -1984,10 +1996,11 @@ function buildChatDialog(page){
         if(!inp.value.trim())return;
         const msgText=inp.value;
         const isFirstMsg=chat.msgs.length===0;
-        chat.msgs.push({from:'user',text:msgText,time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})});
+        const newMsg={from:'user',text:msgText,time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}),adminUnread:true};
+        chat.msgs.push(newMsg);
         inp.value='';save();
-        // Уведомление администратору о новом сообщении
-        apiCall({action:'chat_msg',chatId:chat.id});
+        // Синхронизируем сообщение в KV и уведомляем админа
+        apiCall({action:'chat_msg',chatId:chat.id,msgData:newMsg});
         // Правка 2: авто-ответ ТОЛЬКО на первое сообщение
         if(isFirstMsg){
           setTimeout(()=>{
@@ -2012,6 +2025,36 @@ function buildChatDialog(page){
     page.appendChild(el('div',{css:'padding:14px;text-align:center;font-size:13px;color:var(--txt3);background:rgba(0,0,8,.9);'},['Чат закрыт']));
   }
   setTimeout(()=>{const ma=document.getElementById('msgArea');if(ma)ma.scrollTop=ma.scrollHeight;},50);
+  // Polling новых сообщений от админа (бесшовно — только добавляем пузыри)
+  if(chat.status==='Активный'&&!chat._pollTimer){
+    chat._pollTimer=setInterval(async()=>{
+      if(!S.activeChat||!S.chatOpen){clearInterval(chat._pollTimer);chat._pollTimer=null;return;}
+      try{
+        const r=await fetch('/api/poll',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'get_chat',chatId:chat.id})});
+        const d=await r.json();
+        if(!d.ok||!d.chat)return;
+        const newMsgs=d.chat.msgs||[];
+        const curLen=chat.msgs.length;
+        if(newMsgs.length>curLen){
+          const added=newMsgs.slice(curLen);
+          added.forEach(m=>{
+            chat.msgs.push(m);
+            const ma=document.getElementById('msgArea');
+            if(ma){
+              const bub=el('div',{cls:'msg-bubble '+(m.from==='user'?'msg-out':'msg-in')});
+              bub.style.whiteSpace='pre-line';
+              bub.appendChild(txt(m.text||''));
+              const tm=el('div',{css:'font-size:10px;opacity:.5;margin-top:4px;text-align:'+(m.from==='user'?'right':'left')+';'},[m.time||'']);
+              bub.appendChild(tm);ma.appendChild(bub);ma.scrollTop=ma.scrollHeight;
+            }
+          });
+          save();
+        }
+      }catch(e){}
+    },3000);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -2446,8 +2489,11 @@ function ob9(){
   btn.addEventListener('click',async()=>{
     // ── ФИНИШ — создаём пользователя ──
     const isReferral=S.obIsReferral&&S.obReferrerCode;
-    const promoBonus=isReferral?1000:(S.obPromo&&VALID_PROMOS[S.obPromo]?VALID_PROMOS[S.obPromo].bonus:0);
-    const spinBonus=(!S.obPromo&&S.spinResult)?S.spinResult.v:0;
+    // spinBonus — результат рулетки (уже включает базу 1000, поэтому не прибавляем 1000 отдельно)
+    // promoBonus — бонус за промокод (дополнительно к базе 1000)
+    // referral — 1000 лепестков как бонус поверх базы 1000 (итого 2000)
+    const promoBonus=(!isReferral&&S.obPromo&&VALID_PROMOS[S.obPromo])?VALID_PROMOS[S.obPromo].bonus:0;
+    const spinBonus=(!S.obPromo&&!isReferral&&S.spinResult)?S.spinResult.v:0;
     const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const mkCode=()=>{let r='';for(let i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];return r;};
     S.user={
@@ -2455,7 +2501,7 @@ function ob9(){
       phone:S.obPhone||'',
       addr:S.obAddr||'',
       floor:S.obFloor||'',apt:S.obApt||'',entr:S.obEntr||'',intercom:S.obIntercom||'',
-      petals:1000+promoBonus+spinBonus,
+      petals: spinBonus>0 ? spinBonus : (1000 + promoBonus + (isReferral?1000:0)),
       buds:0,rubles:0,referred:0,
       promoCode:mkCode(),
       usedReferral:isReferral?S.obReferrerCode:'',
@@ -2479,6 +2525,17 @@ function ob9(){
       await fetch('/api/referral',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({action:'register',code:S.user.promoCode,tgId,name:S.user.name})});
+    }catch(e){}
+    // Регистрируем пользователя в глобальной БД (для вкладки Клиенты в админке)
+    try{
+      const tgId2=getTgId();
+      await fetch('/api/poll',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'register_user',userData:{
+          name:S.user.name,phone:S.user.phone,tgId:tgId2,
+          petals:S.user.petals,buds:S.user.buds,
+          promoCode:S.user.promoCode,usedReferral:S.user.usedReferral||''
+        }})});
     }catch(e){}
     // Сброс onboarding состояния
     S.obStep=0;S.obName='';S.obPhone='';S.obAddr='';
@@ -2518,16 +2575,25 @@ function buildAdminLogin(){
 // ADMIN PANEL
 // ══════════════════════════════════════════
 function buildAdmin(){
+  // Запускаем автосинхронизацию данных из KV пока в режиме админа
+  if(!S._adminSyncTimer){
+    S._adminSyncTimer=setInterval(syncAdminData, 5000);
+    syncAdminData(); // сразу при открытии
+  }
   const page=el('div',{cls:'admin-page'});
   const hdr=el('div',{cls:'hdr'});
-  hdr.appendChild(el('button',{cls:'back-btn',onClick:()=>{S.adminMode=false;S.adminDetail=null;render();}},[txt('‹ Выйти')]));
+  hdr.appendChild(el('button',{cls:'back-btn',onClick:()=>{
+    if(S._adminSyncTimer){clearInterval(S._adminSyncTimer);S._adminSyncTimer=null;}
+    S.adminMode=false;S.adminDetail=null;render();
+  }},[txt('‹ Выйти')]));
   hdr.appendChild(el('div',{css:'flex:1;text-align:center;font-size:17px;font-weight:700;'},['⚙️ Администратор']));
   hdr.appendChild(el('div',{css:'width:70px;'}));
   page.appendChild(hdr);
   const tabs=['📊','📦','👤','🌸','📋','💬'];
   const tabBar=el('div',{css:'display:flex;background:rgba(255,255,255,.04);margin:10px 14px 0;border-radius:16px;padding:3px;gap:2px;'});
   // Считаем pending заказы для badge
-  const pendingCount=S.orders.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid').length;
+  const _allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+  const pendingCount=_allOrd.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid').length;
   // Считаем непрочитанные чаты
   const pendingChats=S.chats.filter(c=>c.status==='Активный'&&c.msgs.some(m=>m.from==='user'&&m.adminUnread)).length;
   tabs.forEach((ic,i)=>{
@@ -2543,24 +2609,26 @@ function buildAdmin(){
   });
   page.appendChild(tabBar);
   const scr=el('div',{cls:'scroll',css:'padding:14px 14px 60px;'});
+  scr.id='admin-tab-body';
   [buildAdminDash,buildAdminOrders,buildAdminUsers,buildAdminCatalog,buildAdminLogs,buildAdminChats][S.adminTab]?.(scr);
   page.appendChild(scr);return page;
 }
 
 function buildAdminDash(scr){
-  const completedOrders=S.orders.filter(o=>!['Отменён','ОТМЕНЁН','cancelled'].includes(o.status)&&o.payState!=='cancelled');
+  const allOrders=S.adminOrders.length?S.adminOrders:S.orders;
+  const completedOrders=allOrders.filter(o=>!['Отменён','ОТМЕНЁН','cancelled'].includes(o.status)&&o.payState!=='cancelled');
   const rev=completedOrders.reduce((a,o)=>a+o.total,0);
   const grid=el('div',{css:'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;'});
-  [['💰',rev.toLocaleString('ru')+' ₽','Выручка','var(--green)'],['📦',completedOrders.length+'/'+S.orders.length,'Заказов','var(--blue)'],['👥',S.user?1:0,'Клиентов','var(--accent)'],['🌸',FLOWERS.length+GIFTS.length,'Товаров','var(--gold)']].forEach(([ic,v,lb,c])=>{
+  [['💰',rev.toLocaleString('ru')+' ₽','Выручка','var(--green)'],['📦',completedOrders.length+'/'+allOrders.length,'Заказов','var(--blue)'],['👥',S.adminUsers.length,'Клиентов','var(--accent)'],['🌸',FLOWERS.length+GIFTS.length,'Товаров','var(--gold)']].forEach(([ic,v,lb,c])=>{
     const card=el('div',{css:'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:16px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);'});
     card.innerHTML='<div style="font-size:26px;margin-bottom:5px;">'+ic+'</div><div style="font-size:20px;font-weight:800;color:'+c+';">'+v+'</div><div style="font-size:12px;color:var(--txt2);font-weight:600;">'+lb+'</div>';
     grid.appendChild(card);
   });
   scr.appendChild(grid);
   scr.appendChild(el('div',{css:'font-size:17px;font-weight:700;margin-bottom:10px;'},['Последние заказы']));
-  if(!S.orders.length){scr.appendChild(el('div',{css:'color:var(--txt3);font-size:14px;'},['Нет заказов']));return;}
+  if(!allOrders.length){scr.appendChild(el('div',{css:'color:var(--txt3);font-size:14px;'},['Нет заказов']));return;}
   const sec=el('div',{cls:'list-sec'});
-  S.orders.slice(0,5).forEach(o=>{
+  allOrders.slice(0,5).forEach(o=>{
     const r=el('div',{cls:'list-row'});
     const inf=el('div',{css:'flex:1;'});
     inf.appendChild(el('div',{css:'font-size:13px;font-weight:700;'},['Заказ №'+o.id+' · '+o.date]));
@@ -2575,7 +2643,8 @@ function buildAdminOrders(scr){
   // ── ДЕТАЛЬНАЯ СТРАНИЦА ЗАКАЗА ──────────────────────────────────────────
   if(S.adminDetail&&S.adminDetail._orderId){
     const ordId=S.adminDetail._orderId;
-    const o=S.orders.find(x=>x.id===ordId);
+    const allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+    const o=allOrd.find(x=>String(x.id)===String(ordId));
     if(!o){S.adminDetail=null;render();return;}
 
     const back=el('button',{cls:'back-btn',css:'margin-bottom:16px;display:flex;align-items:center;gap:4px;',
@@ -2725,7 +2794,8 @@ function buildAdminOrders(scr){
     return;
   }
 
-  // ── СПИСОК ЗАКАЗОВ ──────────────────────────────────────────────────────
+  // ── СПИСОК ЗАКАЗОВ
+  const allOrd=S.adminOrders.length?S.adminOrders:S.orders; ──────────────────────────────────────────────────────
   // Таб: Текущие / Архив
   if(S._ordTab===undefined)S._ordTab=0;
   const tabRow=el('div',{css:'display:flex;gap:8px;margin-bottom:14px;'});
@@ -2735,7 +2805,7 @@ function buildAdminOrders(scr){
     b.textContent=lb;
     // Красный badge если есть заказы требующие внимания
     if(i===0){
-      const needAction=S.orders.filter(o=>{
+      const needAction=allOrd.filter(o=>{
         const ps=o.payState||'';
         return ps==='waiting_requisites'||ps==='paid';
       }).length;
@@ -2749,7 +2819,7 @@ function buildAdminOrders(scr){
 
   const current=S._ordTab===0;
   const now=Date.now();const sixMo=6*30*24*3600*1000;
-  const items=S.orders.filter(o=>{
+  const items=allOrd.filter(o=>{
     const arch=['ЗАКРЫТ','ОТМЕНЁН','Завершён','Отменён'].includes(o.status);
     if(current) return !arch;
     return arch&&(!o.ts||(now-o.ts)<sixMo);
@@ -2821,7 +2891,7 @@ function buildOrderStatusButtons(scr,o,ordId){
 
 function buildAdminUsers(scr){
   scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:14px;'},['👤 Клиенты']));
-  const users=S.user?[S.user]:[];
+  const users=S.adminUsers.length?S.adminUsers:(S.user?[S.user]:[]);
   if(!users.length){scr.appendChild(el('div',{css:'color:var(--txt3);'},['Нет клиентов']));return;}
   users.forEach(u=>{
     if(S.adminDetail===u.name){
@@ -2963,8 +3033,9 @@ function buildAdminLogs(scr){
 
 function buildAdminChats(scr){
   scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:14px;'},['💬 Чаты поддержки']));
-  if(!S.chats.length){scr.appendChild(el('div',{css:'color:var(--txt3);font-size:14px;'},['Нет обращений']));return;}
-  S.chats.forEach(chat=>{
+  const adminChatList=S.adminChats.length?S.adminChats:S.chats;
+  if(!adminChatList.length){scr.appendChild(el('div',{css:'color:var(--txt3);font-size:14px;'},['Нет обращений']));return;}
+  adminChatList.forEach(chat=>{
     if(S.adminDetail===chat.id){
       const back=el('button',{cls:'back-btn',css:'margin-bottom:14px;',onClick:()=>{S.adminDetail=null;render();}},[txt('‹ К чатам')]);
       scr.appendChild(back);
@@ -2972,7 +3043,7 @@ function buildAdminChats(scr){
       ti.appendChild(el('div',{css:'font-size:17px;font-weight:700;'},[chat.topic]));
       if(chat.status==='Активный'){
         const closeB=el('button',{css:'background:rgba(255,55,95,.1);border:1px solid rgba(255,55,95,.35);border-radius:10px;padding:6px 14px;color:var(--pink);font-size:12px;font-weight:600;cursor:pointer;',
-          onClick:()=>{chat.status='Закрыт';addLog('Чат закрыт: '+chat.topic,'');save();render();}});
+          onClick:()=>{chat.status='Закрыт';addLog('Чат закрыт: '+chat.topic,'');save();apiCall({action:'close_chat',chatId:chat.id});render();}});
         closeB.textContent='Закрыть чат';ti.appendChild(closeB);
       }
       scr.appendChild(ti);
@@ -2984,15 +3055,15 @@ function buildAdminChats(scr){
         const inp=el('input',{cls:'inp',css:'margin-top:12px;',placeholder:'Ответить...'});
         const sendB=el('button',{cls:'btn-prim',css:'margin-top:8px;',onClick:()=>{
           if(!inp.value.trim())return;
-          chat.msgs.push({from:'admin',text:inp.value,time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}),unread:true});
-          // Правка 7: увеличиваем счётчик непрочитанных у пользователя
-          S.unreadChats=(S.unreadChats||0)+1;
+          const msgText=inp.value.trim();
+          chat.msgs.push({from:'admin',text:msgText,time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}),unread:true});
           inp.value='';save();
-          // Уведомляем пользователя через бот
-          apiCall({action:'admin_reply',chatId:chat.id,msgData:{chatId:chat.id}});
-          // Показываем уведомление сверху если пользователь сейчас в приложении
-          showNotif('Ответ в чат №'+chat.id+' отправлен','✅');
-          render();
+          apiCall({action:'admin_reply',chatId:chat.id,userTgId:chat.userTgId||null,msg:msgText});
+          showNotif('Ответ отправлен','✅');
+          // Бесшовно добавляем пузырь без render()
+          const bub=el('div',{cls:'msg-bubble msg-out',css:'max-width:75%;margin:3px 0 3px auto;'});
+          bub.appendChild(txt(msgText));inp.parentNode.insertBefore(bub,inp);
+          inp.parentNode.scrollTop=inp.parentNode.scrollHeight;
         }});sendB.textContent='Отправить';
         scr.appendChild(inp);scr.appendChild(sendB);
       }
@@ -3012,6 +3083,17 @@ function buildAdminChats(scr){
 // ══════════════════════════════════════════
 // СТАРТ
 // ══════════════════════════════════════════
+
+// 0) Проверяем ?admin=1 для прямого входа в админку (только для владельца)
+(function checkAdminParam(){
+  try{
+    const urlParams=new URLSearchParams(window.location.search);
+    if(urlParams.get('admin')==='1' && isOwner()){
+      S.adminMode=true;
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  }catch(e){}
+})();
 
 // 1) Читаем параметр реквизитов из URL (?req=base64)
 (function checkReqParam(){
@@ -3037,6 +3119,60 @@ function buildAdminChats(scr){
     }
   }catch(e){}
 })();
+
+// ══════════════════════════════════════════
+// СИНХРОНИЗАЦИЯ ДАННЫХ ДЛЯ АДМИНКИ
+// ══════════════════════════════════════════
+async function syncAdminData(){
+  if(!S.adminMode)return;
+  try{
+    const [rOrders,rUsers,rChats]=await Promise.all([
+      fetch('/api/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_orders'})}),
+      fetch('/api/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_users'})}),
+      fetch('/api/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_chats'})}),
+    ]);
+    const [dO,dU,dC]=await Promise.all([rOrders.json(),rUsers.json(),rChats.json()]);
+    let changed=false;
+    if(dO.ok&&Array.isArray(dO.orders)){
+      // Проверяем реальное изменение по количеству и последнему ts
+      const newTs=dO.orders.map(o=>o._created||o.ts||0).join(',');
+      const oldTs=S.adminOrders.map(o=>o._created||o.ts||0).join(',');
+      if(newTs!==oldTs){S.adminOrders=dO.orders;changed=true;}
+    }
+    if(dU.ok&&Array.isArray(dU.users)){
+      if(dU.users.length!==S.adminUsers.length){S.adminUsers=dU.users;changed=true;}
+    }
+    if(dC.ok&&Array.isArray(dC.chats)){
+      const newCTs=dC.chats.map(c=>c._updated||0).join(',');
+      const oldCTs=S.adminChats.map(c=>c._updated||0).join(',');
+      if(newCTs!==oldCTs){S.adminChats=dC.chats;changed=true;}
+    }
+    if(!changed)return;
+    // Бесшовное обновление — обновляем только счётчики/badges без полного render()
+    _patchAdminBadges();
+    // Если открыта вкладка (не детальная страница) — тихо перерисовываем только контент вкладки
+    if(S.adminMode&&!S.adminDetail){
+      const body=document.getElementById('admin-tab-body');
+      if(body){
+        body.innerHTML='';
+        [buildAdminDash,buildAdminOrders,buildAdminUsers,buildAdminCatalog,buildAdminLogs,buildAdminChats][S.adminTab]?.(body);
+      }
+    }
+  }catch(e){console.error('syncAdminData err:',e);}
+}
+
+function _patchAdminBadges(){
+  // Обновляем badge на кнопке Заказы без перерисовки всей страницы
+  const allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+  const pending=allOrd.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid').length;
+  const unreadC=S.adminChats.filter(c=>c.status!=='Закрыт'&&(c.msgs||[]).some(m=>m.adminUnread)).length;
+  document.querySelectorAll('[data-admin-badge-orders]').forEach(el=>{
+    el.textContent=pending>0?String(pending):'';el.style.display=pending>0?'':'none';
+  });
+  document.querySelectorAll('[data-admin-badge-chats]').forEach(el=>{
+    el.textContent=unreadC>0?String(unreadC):'';el.style.display=unreadC>0?'':'none';
+  });
+}
 
 // ══════════════════════════════════════════
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ранее отсутствовали)

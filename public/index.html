@@ -1740,12 +1740,34 @@ function buildProfSec(){
 
   else if(k==='orders'){
     scr.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:16px;'},['📦 Мои заказы']));
+    // Тихо обновляем статусы активных заказов из KV
+    const activeOrd=S.orders.filter(o=>!['Завершён','Отменён','ЗАКРЫТ','ОТМЕНЁН'].includes(o.status));
+    if(activeOrd.length){
+      Promise.all(activeOrd.map(async o=>{
+        try{
+          const r=await fetch('/api/order-state',{method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'get_order',orderId:String(o.id)})});
+          const d=await r.json();
+          if(d.state&&d.state.status&&d.state.status!==o.status){
+            o.status=d.state.status;return true;
+          }
+        }catch(e){}
+        return false;
+      })).then(results=>{
+        if(results.some(Boolean)){save();
+          const body=document.getElementById('prof-orders-list');
+          if(body)renderOrdersList(body);
+        }
+      });
+    }
     const now=Date.now();const sixMo=6*30*24*3600*1000;
-    const visible=S.orders.filter(o=>{
-      const ts=o.ts||Date.now();return(now-ts)<sixMo;
-    });
-    if(!visible.length)scr.appendChild(el('div',{css:'text-align:center;padding:40px;color:var(--txt3);'},['Пока нет заказов']));
-    else visible.forEach(o=>{
+    const listWrap=el('div',{id:'prof-orders-list'});
+    function renderOrdersList(wrap){
+      wrap.innerHTML='';
+      const visible=S.orders.filter(o=>{const ts=o.ts||Date.now();return(now-ts)<sixMo;});
+      if(!visible.length){wrap.appendChild(el('div',{css:'text-align:center;padding:40px;color:var(--txt3);'},['Пока нет заказов']));return;}
+      visible.forEach(o=>{
       const st=clientStatus(o.status);
       const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','var(--glass)'];
       const savedCo=loadCheckout();
@@ -1778,8 +1800,11 @@ function buildProfSec(){
         row.appendChild(contB);row.appendChild(cancelB);
         card.appendChild(row);
       }
-      scr.appendChild(card);
+      wrap.appendChild(card);
     });
+    }
+    renderOrdersList(listWrap);
+    scr.appendChild(listWrap);
   }
 
   else if(k==='orderDetail'){
@@ -2717,45 +2742,55 @@ function buildAdminOrders(scr){
       const phoneI=el('input',{cls:'inp',css:'margin-bottom:20px;',placeholder:'+7 (999) 999-99-99',type:'tel'});
       scr.appendChild(phoneI);
 
-      const btnRow=el('div',{css:'display:flex;gap:10px;'});
+      const btnRow=el('div',{css:'display:flex;gap:10px;flex-wrap:wrap;'});
 
-      const sendB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
-        if(!nameI.value.trim()||!phoneI.value.trim()){showNotif('Заполните все поля','⚠️');return;}
-        sendB.disabled=true;sendB.textContent='Отправляем...';
+      // ── ДЕМО: мгновенная отправка с тестовыми реквизитами ──
+      const demoB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
+        demoB.disabled=true;demoB.textContent='Отправляем...';
         const bank=BANKS.find(b=>b.id===bankSel.value)||BANKS[0];
-        const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nameI.value.trim(),payPhone:phoneI.value.trim(),
-          userTgId:o.userTgId||null, orderId:String(ordId)};
-        // 1. localStorage сразу
+        const nm=nameI.value.trim()||'Иван Иванов';
+        const ph=phoneI.value.trim()||'+7 999 000-00-00';
+        const upd={
+          payState:'requisites_sent',
+          payBankId:bank.id,
+          payBank:bank.name,
+          payName:nm,
+          payPhone:ph,
+          userTgId:o.userTgId||null,
+          orderId:String(ordId)
+        };
+        // Пишем в localStorage (для того же устройства)
         setLocalOrderState(ordId, upd);
-        // 2. ГЛАВНОЕ: пишем в Vercel KV — именно отсюда пользователь читает на polling
+        // Пишем в KV (для другого устройства)
         try{
           await fetch('/api/order-state',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({action:'set_order', orderId:String(ordId), data:upd})
           });
-        }catch(e){console.error('KV write failed:',e);}
-        // 3. Обновляем локальный объект заказа
+        }catch(e){}
         Object.assign(o, upd);
         o.status='Ожидаем оплаты';
-        addLog('Реквизиты отправлены по заказу №'+ordId,'Банк: '+bank.name);
+        addLog('Реквизиты отправлены по заказу №'+ordId,'Банк: '+bank.name+' · '+nm+' · '+ph);
         notifyAdmin({action:'requisites_sent',orderId:String(ordId),bankName:bank.name});
         save();showNotif('Реквизиты отправлены!','✅');
         S.adminDetail=null;render();
       }});
-      sendB.textContent='Отправить реквизиты';
+      demoB.textContent='💳 Отправить реквизиты';
 
       const cancelB=el('button',{
         css:'flex:1;padding:17px;border-radius:20px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:16px;font-weight:700;cursor:pointer;',
         onClick:async()=>{
           setLocalOrderState(ordId,{payState:'cancelled'});
+          try{await fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'set_order',orderId:String(ordId),data:{payState:'cancelled'}})});}catch(e){}
           o.status='Отменён';o.payState='cancelled';
           addLog('Заказ №'+ordId+' отменён администратором','');
           notifyAdmin({action:'order_cancelled',orderId:String(ordId)});
           save();showNotif('Заказ отменён','❌');S.adminDetail=null;render();
         }});
       cancelB.textContent='❌ Отменить';
-      btnRow.appendChild(sendB);btnRow.appendChild(cancelB);scr.appendChild(btnRow);
+      btnRow.appendChild(demoB);btnRow.appendChild(cancelB);scr.appendChild(btnRow);
     }
 
     // ── ПОДТВЕРЖДЕНИЕ ОПЛАТЫ ──
@@ -2894,7 +2929,16 @@ function buildOrderStatusButtons(scr,o,ordId){
           addLog('Начислено ☘️'+earned+' (заказ №'+o.id+')','');
           showNotif('Начислено +'+earned+' ☘️');
         }
-        if(st==='ОТМЕНЁН'){o.payState='cancelled';setLocalOrderState(o.id,{payState:'cancelled'});}
+        const kvUpd={status:st};
+        if(st==='ОТМЕНЁН'||st==='Отменён'){o.payState='cancelled';kvUpd.payState='cancelled';}
+        else if(st==='ЗАКРЫТ'||st==='Завершён'){kvUpd.payState='confirmed';}
+        else if(st==='Доставляется'){kvUpd.payState='confirmed';}
+        setLocalOrderState(o.id,kvUpd);
+        // Пишем в KV чтобы пользователь видел изменение статуса
+        try{await fetch('/api/order-state',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'set_order',orderId:String(o.id),data:{...kvUpd,_statusUpdate:Date.now()}})
+        });}catch(e){}
         save();render();
       }});
     b.textContent=st;stRow.appendChild(b);

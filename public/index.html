@@ -1453,27 +1453,28 @@ function buildCO4(page){
       payState:order.payState,status:order.status,
       date:order.date,disc:order.disc||0
     }});
+
+    // ── ДЕМО: сразу выдаём тестовые реквизиты без ожидания ──
+    const demoReq={
+      payState:'requisites_sent',
+      payBankId:'sber',
+      payBank:'Сбербанк',
+      payName:'Иван Иванов И.',
+      payPhone:'+7 999 000-00-00',
+      userTgId:order.userTgId||null,
+      orderId:String(order.id)
+    };
+    setLocalOrderState(order.id, demoReq);
+    co.payBank=BANKS.find(b=>b.id==='sber')||BANKS[0];
+    co.payPhone=demoReq.payPhone;
+    co.payName=demoReq.payName;
+    co.step=5;
+    saveCheckout(co);
+    render();
+    return;
   }
-
-  // ── Рисуем страницу ───────────────────────────────────
-  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
-  scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:30px;'},['Готовим реквизиты']));
-  const spinEl=document.createElement('div');spinEl.className='spinner';spinEl.style.margin='0 auto 30px';scr.appendChild(spinEl);
-  const msgDiv=document.createElement('div');msgDiv.id='co4msg';msgDiv.style.cssText='font-size:13px;color:var(--txt3);min-height:20px;transition:opacity .5s;';
-  msgDiv.textContent=CO_MSGS[co.msgIdx||0];scr.appendChild(msgDiv);
-  page.appendChild(scr);
-
-  // ── Крутим сообщения ──────────────────────────────────
-  if(!co._msgTimer){
-    co._msgTimer=setInterval(()=>{
-      co.msgIdx=((co.msgIdx||0)+1)%CO_MSGS.length;
-      const md=document.getElementById('co4msg');
-      if(md){md.style.opacity='0';setTimeout(()=>{if(md){md.textContent=CO_MSGS[co.msgIdx];md.style.opacity='1';}},400);}
-    },2000);
-  }
-
-  // ── Запускаем глобальный поллер (переживает render()) ─
-  startReqPoller(co.orderId);
+  // orderId уже есть (возврат на шаг) — просто переходим на CO5
+  if(co.step===4){co.step=5;saveCheckout(co);render();}
 }
 
 function buildCO5(page){

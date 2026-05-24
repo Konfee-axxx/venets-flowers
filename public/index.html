@@ -981,10 +981,9 @@ function buildCheckout(){
   else if(co.step===1)buildCO1(page);
   else if(co.step===2)buildCO2(page);
   else if(co.step===3)buildCO3(page);
-  else if(co.step===4)buildCO4(page);
-  else if(co.step===5)buildCO5(page);
-  else if(co.step===6)buildCO6(page);
-  else buildCO7(page);
+  else if(co.step===4)buildCO4(page);  // реквизиты + «Я оплатил»
+  else if(co.step===5)buildCO5(page);  // ожидание подтверждения от админа
+  else buildCO7(page);                 // итог
   return page;
 }
 function coHdr(title,onBack){
@@ -1366,6 +1365,44 @@ function buildCO3(page){
   const b=el('button',{id:'co3-btn',cls:'btn-prim',
     onClick:()=>{
       if(!co.receiver)return;
+      if(co.receiver==='other'&&(!co.otherName||!co.otherPhone)){
+        showNotif('Заполните имя и телефон получателя','⚠️');return;
+      }
+      // Создаём заказ прямо здесь, до render()
+      if(!co.orderId){
+        const addrs=(S.user&&S.user.addresses)||[];
+        const addr=co._tempAddr||addrs[co.addrIdx]||{};
+        const order={
+          id:Math.floor(Math.random()*90000+10000),
+          date:new Date().toLocaleDateString('ru'),
+          items:{...S.cart},total:co.total,status:'Заказ создан',
+          address:addr.street||S.user.addr||'—',
+          timeSlot:co.timeSlot||'Как можно быстрее',
+          receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
+          disc:co.disc||0,
+          userName:S.user.name||'—',userPhone:S.user.phone||'—',
+          userTgId:getTgId(),
+          payState:'waiting_requisites',
+          ts:Date.now()
+        };
+        S.orders.unshift(order);
+        if(co.disc>0&&S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
+        co.orderId=order.id;
+        co.payBank=BANKS[0];
+        co.payPhone='+7 999 000-00-00';
+        co.payName='Иван Иванов И.';
+        addLog('Создан заказ №'+order.id,'Сумма: '+order.total+' ₽');
+        setLocalOrderState(order.id,order);
+        save();
+        notifyAdmin({action:'new_order',orderData:{
+          id:order.id,total:order.total,timeSlot:order.timeSlot,
+          userName:order.userName,userPhone:order.userPhone,
+          userTgId:order.userTgId||null,
+          items:order.items,address:order.address,
+          payState:order.payState,status:order.status,
+          date:order.date,disc:order.disc||0
+        }});
+      }
       co.step=4;saveCheckout(co);render();
     }});
   b.textContent='Продолжить →';
@@ -1408,7 +1445,7 @@ function startReqPoller(orderId){
         co.payName=st.payName||'—';
         // Сохраняем в localStorage тоже
         setLocalOrderState(oid,st);
-        co.step=5;saveCheckout(co);render();return;
+        co.step=4;saveCheckout(co);render();return;
       }
     }catch(e){}
   },2500);
@@ -1420,107 +1457,73 @@ function stopReqPoller(){
 
 function buildCO4(page){
   const co=S.checkout;
-
-  // ── Создаём заказ один раз ─────────────────────────
-  if(!co.orderId){
-    const addrs=(S.user&&S.user.addresses)||[];
-    const addr=co._tempAddr||addrs[co.addrIdx]||{};
-    const order={
-      id:Math.floor(Math.random()*90000+10000),
-      date:new Date().toLocaleDateString('ru'),
-      items:{...S.cart},total:co.total,status:'Заказ создан',
-      address:addr.street||S.user.addr||'—',
-      timeSlot:co.timeSlot||'Как можно быстрее',
-      receiver:co.receiver==='other'?{name:co.otherName,phone:co.otherPhone}:'me',
-      disc:co.disc,
-      userName:S.user.name||'—',userPhone:S.user.phone||'—',
-      userTgId:getTgId(),
-      payState:'waiting_requisites',
-      ts:Date.now()
-    };
-    S.orders.unshift(order);
-    if(co.disc>0&&S.usePetals)S.user.petals=Math.max(0,(S.user.petals||0)-co.disc);
-    co.orderId=order.id;
-    addLog('Создан заказ №'+order.id,'Сумма: '+order.total+' ₽');
-    setLocalOrderState(order.id,order);
-    save();
-    saveCheckout(co);
-    notifyAdmin({action:'new_order',orderData:{
-      id:order.id,total:order.total,timeSlot:order.timeSlot,
-      userName:order.userName,userPhone:order.userPhone,
-      userTgId:order.userTgId||null,
-      items:order.items,address:order.address,
-      payState:order.payState,status:order.status,
-      date:order.date,disc:order.disc||0
-    }});
-
-    // ── ДЕМО: сразу выдаём тестовые реквизиты без ожидания ──
-    const demoReq={
-      payState:'requisites_sent',
-      payBankId:'sber',
-      payBank:'Сбербанк',
-      payName:'Иван Иванов И.',
-      payPhone:'+7 999 000-00-00',
-      userTgId:order.userTgId||null,
-      orderId:String(order.id)
-    };
-    setLocalOrderState(order.id, demoReq);
-    co.payBank=BANKS.find(b=>b.id==='sber')||BANKS[0];
-    co.payPhone=demoReq.payPhone;
-    co.payName=demoReq.payName;
-    co.step=5;
-    saveCheckout(co);
-    render();
-    return;
-  }
-  // orderId уже есть (возврат на шаг) — просто переходим на CO5
-  if(co.step===4){co.step=5;saveCheckout(co);render();}
-}
-
-function buildCO5(page){
-  const co=S.checkout;
-  if(!co._deadline)co._deadline=Date.now()+5*60*1000;
+  page.appendChild(coHdr('Оплата',()=>{co.step=3;render();}));
   const scr=el('div',{cls:'scroll',css:'padding:20px 16px 120px;text-align:center;'});
-  const timDiv=el('div',{id:'co5timer',css:'font-size:28px;font-weight:900;margin-bottom:20px;color:var(--gold);'});
-  function updateTimer(){
-    const s=Math.max(0,Math.ceil((co._deadline-Date.now())/1000));
-    const m=Math.floor(s/60),sec=s%60;
-    timDiv.textContent='⏱ '+m+':'+(sec<10?'0':'')+sec;
-    if(s>0&&document.getElementById('co5timer'))requestAnimationFrame(updateTimer);
-  }
-  updateTimer();
-  scr.appendChild(timDiv);
-  scr.appendChild(el('div',{css:'font-size:18px;font-weight:700;margin-bottom:20px;'},['Оплата заказа №'+co.orderId]));
+
+  scr.appendChild(el('div',{css:'font-size:15px;color:var(--txt2);margin-bottom:6px;'},['Заказ №'+co.orderId]));
+  scr.appendChild(el('div',{css:'font-size:32px;font-weight:900;color:var(--accent);margin-bottom:24px;'},[co.total.toLocaleString('ru')+' ₽']));
+
+  // Банковская карточка
   const bank=co.payBank||BANKS[0];
-  const bankCard=el('div',{css:'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px;margin-bottom:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.1);'});
-  const bImg=el('img',{src:bank.logo,css:'width:64px;height:64px;border-radius:16px;margin-bottom:12px;object-fit:contain;background:#fff;padding:8px;',onerror:'this.style.display="none"'});
+  const bankCard=el('div',{css:'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px;margin-bottom:20px;'});
+  const bImg=el('img',{src:bank.logo||'',css:'width:64px;height:64px;border-radius:16px;margin-bottom:12px;object-fit:contain;background:#fff;padding:8px;'});
+  bImg.onerror=()=>{bImg.style.display='none';};
   bankCard.appendChild(bImg);
-  bankCard.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:10px;'},[bank.name]));
-  bankCard.appendChild(el('div',{css:'display:inline-block;background:rgba(255,255,255,.1);border-radius:100px;padding:6px 18px;font-size:14px;font-weight:700;margin-bottom:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.15);'},[co.payName||'—']));
-  bankCard.appendChild(el('div',{css:'font-size:32px;font-weight:900;color:var(--accent);margin-bottom:14px;'},[co.total.toLocaleString('ru')+' ₽']));
-  const phoneRow=el('div',{css:'background:rgba(10,132,255,.1);border:1px solid rgba(10,132,255,.25);border-radius:16px;padding:16px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(10,132,255,.2);',onClick:()=>{try{navigator.clipboard.writeText(co.payPhone||'').then(()=>showNotif('Скопировано!','📋'));}catch(e){showNotif('Скопировано!','📋');}}});
-  phoneRow.appendChild(el('div',{css:'font-size:22px;font-weight:900;color:var(--blue);'},[co.payPhone||'—']));
-  phoneRow.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin-top:4px;'},['Нажми, чтобы скопировать']));
-  bankCard.appendChild(phoneRow);scr.appendChild(bankCard);page.appendChild(scr);
-  if(!co._paidTimer){
-    co._paidEnabled=false;
-    co._paidTimer=setTimeout(()=>{co._paidEnabled=true;const b=document.getElementById('paidBtn');if(b){b.disabled=false;b.style.opacity='1';}},15000);
-  }
+  bankCard.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:8px;'},[bank.name||'Сбербанк']));
+  bankCard.appendChild(el('div',{css:'font-size:15px;color:var(--txt2);margin-bottom:16px;'},[co.payName||'Иван Иванов И.']));
+
+  // Телефон — кликабельный для копирования
+  const phoneRow=el('div',{css:'background:rgba(10,132,255,.1);border:1px solid rgba(10,132,255,.3);border-radius:16px;padding:16px;cursor:pointer;',
+    onClick:()=>{
+      try{navigator.clipboard.writeText(co.payPhone||'').then(()=>showNotif('Скопировано!','📋'));}
+      catch(e){showNotif('Скопировано!','📋');}
+    }});
+  phoneRow.appendChild(el('div',{css:'font-size:26px;font-weight:900;color:var(--blue);letter-spacing:1px;'},[co.payPhone||'+7 999 000-00-00']));
+  phoneRow.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin-top:4px;'},['Нажми, чтобы скопировать номер']));
+  bankCard.appendChild(phoneRow);
+  scr.appendChild(bankCard);
+
+  // Инструкция
+  const steps=[
+    '1. Скопируй номер телефона выше',
+    '2. Открой приложение '+bank.name,
+    '3. Переведи точную сумму по СБП',
+    '4. Нажми «Я оплатил» ниже',
+  ];
+  const inst=el('div',{css:'background:rgba(255,255,255,.04);border-radius:16px;padding:16px;text-align:left;margin-bottom:8px;'});
+  steps.forEach(s=>{
+    const r=el('div',{css:'font-size:13px;color:var(--txt2);padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,.05);'});
+    r.textContent=s;inst.appendChild(r);
+  });
+  scr.appendChild(inst);
+  page.appendChild(scr);
+
+  // Кнопка «Я оплатил»
   const foot=el('div',{css:'padding:14px 16px calc(14px + var(--safe-b));border-top:0.5px solid rgba(255,255,255,.08);background:var(--bg);'});
-  const payBtn=el('button',{id:'paidBtn',cls:'btn-prim',onClick:()=>{
-    // Записываем в shared state что пользователь оплатил
+  if(!co._paidEnabled&&!co._paidTimer){
+    co._paidEnabled=false;
+    co._paidTimer=setTimeout(()=>{
+      co._paidEnabled=true;
+      const b=document.getElementById('co4-paid-btn');
+      if(b){b.disabled=false;b.style.opacity='1';}
+    },10000);
+  }
+  const payBtn=el('button',{id:'co4-paid-btn',cls:'btn-prim',onClick:()=>{
     setLocalOrderState(co.orderId,{payState:'paid',status:'Ожидаем подтверждения'});
     const ord=S.orders.find(o=>o.id===co.orderId);
     if(ord){ord.status='Ожидаем подтверждения';ord.payState='paid';save();}
-    addLog('Оплата заказа №'+co.orderId,'Ожидаем подтверждения');
-    // Уведомление админу
     notifyAdmin({action:'paid',orderId:String(co.orderId)});
-    co.step=6;saveCheckout(co);render();
+    co.step=5;saveCheckout(co);render();
   }});
-  payBtn.textContent='Я оплатил ✓';payBtn.disabled=!co._paidEnabled;payBtn.style.opacity=co._paidEnabled?'1':'0.4';
-  foot.appendChild(payBtn);page.appendChild(foot);
+  payBtn.textContent='✅ Я оплатил';
+  payBtn.disabled=!co._paidEnabled;
+  payBtn.style.opacity=co._paidEnabled?'1':'0.4';
+  foot.appendChild(payBtn);
+  page.appendChild(foot);
 }
-function buildCO6(page){
+// buildCO5 удалён — шаг 4 теперь страница реквизитов (buildCO4)
+// шаг 5 — ожидание подтверждения оплаты
+function buildCO5(page){
   const co=S.checkout;
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;'});
   scr.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:30px;'},['Проверяем платёж...']));
@@ -1545,11 +1548,11 @@ function buildCO6(page){
       if(ord.payState==='confirmed'){
         clearInterval(co._confirmPoll);clearInterval(co._payMsgTimer);
         co._confirmPoll=null;co._payMsgTimer=null;
-        co.payStatus='ok';co.step=7;render();
+        co.payStatus='ok';co.step=6;render();
       }else if(ord.payState==='cancelled'){
         clearInterval(co._confirmPoll);clearInterval(co._payMsgTimer);
         co._confirmPoll=null;co._payMsgTimer=null;
-        co.payStatus='fail';co.step=7;render();
+        co.payStatus='fail';co.step=6;render();
       }
     },1000);
   }

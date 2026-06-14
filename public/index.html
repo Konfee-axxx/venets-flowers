@@ -303,14 +303,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 // ДАННЫЕ
 // ══════════════════════════════════════════
 let FLOWERS = [
-  {id:1,type:'Роза',p:'Playa Blanca',h:60,color:'Красный',price:3200,e:'🌹',tags:['Любимой','Ароматные'],desc:'Насыщенная красная роза с глубоким ароматом. Выращена на горных плантациях Эквадора.',rating:4.9,sold:342},
-  {id:2,type:'Роза',p:'Vendela',h:80,color:'Белый',price:4100,e:'🤍',tags:['Той самой','Высокие'],desc:'Элегантная кремово-белая роза. Символ чистоты и нежных чувств.',rating:4.8,sold:211},
-  {id:3,type:'Пионы',p:'Pink Floyd',h:55,color:'Розовый',price:5500,e:'🌸',tags:['Для мамы','Ароматные','Скидка'],desc:'Пышные розовые пионы с нежным ароматом. Настоящий шедевр природы.',rating:5.0,sold:389},
-  {id:4,type:'Хризантема',p:'Vendela',h:50,color:'Жёлтый',price:2800,e:'🌼',tags:['Крупные','Короткие'],desc:'Яркая солнечная хризантема. Долго стоит в вазе, поднимает настроение.',rating:4.7,sold:156},
-  {id:5,type:'Роза',p:'Pink Floyd',h:90,color:'Лиловый',price:4800,e:'💜',tags:['Высокие','Той самой'],desc:'Редкий лиловый сорт с завораживающим цветом и неповторимым ароматом.',rating:4.9,sold:98},
-  {id:6,type:'Пионы',p:'Playa Blanca',h:70,color:'Кремовый',price:6200,e:'🌺',tags:['Крупные','Для мамы','Ароматные'],desc:'Кремовые пионы — роскошь и нежность в каждом лепестке.',rating:5.0,sold:267},
-  {id:7,type:'Хризантема',p:'Pink Floyd',h:65,color:'Розовый',price:2900,e:'🌷',tags:['Скидка','Короткие'],desc:'Нежная розовая хризантема по специальной цене.',rating:4.6,sold:445},
-  {id:8,type:'Роза',p:'Vendela',h:100,color:'Оранжевый',price:5300,e:'🧡',tags:['Высокие','Крупные'],desc:'Величественная оранжевая роза 100 см — производит незабываемое впечатление.',rating:4.8,sold:134},
+  {id:1,type:'Роза',p:'Playa Blanca',h:60,color:'Красный',price:3200,e:'🌹',tags:['Любимой','Ароматные'],desc:'Насыщенная красная роза с глубоким ароматом. Выращена на горных плантациях Эквадора.',rating:4.9,sold:342,shopName:'Flora Moscow'},
+  {id:2,type:'Роза',p:'Vendela',h:80,color:'Белый',price:4100,e:'🤍',tags:['Той самой','Высокие'],desc:'Элегантная кремово-белая роза. Символ чистоты и нежных чувств.',rating:4.8,sold:211,shopName:'Rose Garden'},
+  {id:3,type:'Пионы',p:'Pink Floyd',h:55,color:'Розовый',price:5500,e:'🌸',tags:['Для мамы','Ароматные','Скидка'],desc:'Пышные розовые пионы с нежным ароматом. Настоящий шедевр природы.',rating:5.0,sold:389,shopName:'Peony House'},
+  {id:4,type:'Хризантема',p:'Vendela',h:50,color:'Жёлтый',price:2800,e:'🌼',tags:['Крупные','Короткие'],desc:'Яркая солнечная хризантема. Долго стоит в вазе, поднимает настроение.',rating:4.7,sold:156,shopName:'Flora Moscow'},
+  {id:5,type:'Роза',p:'Pink Floyd',h:90,color:'Лиловый',price:4800,e:'💜',tags:['Высокие','Той самой'],desc:'Редкий лиловый сорт с завораживающим цветом и неповторимым ароматом.',rating:4.9,sold:98,shopName:'Violet Bloom'},
+  {id:6,type:'Пионы',p:'Playa Blanca',h:70,color:'Кремовый',price:6200,e:'🌺',tags:['Крупные','Для мамы','Ароматные'],desc:'Кремовые пионы — роскошь и нежность в каждом лепестке.',rating:5.0,sold:267,shopName:'Peony House'},
+  {id:7,type:'Хризантема',p:'Pink Floyd',h:65,color:'Розовый',price:2900,e:'🌷',tags:['Скидка','Короткие'],desc:'Нежная розовая хризантема по специальной цене.',rating:4.6,sold:445,shopName:'Rose Garden'},
+  {id:8,type:'Роза',p:'Vendela',h:100,color:'Оранжевый',price:5300,e:'🧡',tags:['Высокие','Крупные'],desc:'Величественная оранжевая роза 100 см — производит незабываемое впечатление.',rating:4.8,sold:134,shopName:'Violet Bloom'},
 ];
 let GIFTS = [
   {id:101,type:'Конфеты',name:'Raffaello Box',price:1200,e:'🍬',tags:['Вкусно','Той самой','Сладкоежке'],desc:'Коробка изысканных конфет Raffaello.',rating:4.9,sold:523,vegan:false,halal:true,noNuts:false},
@@ -401,6 +401,7 @@ let S = {
   adminMode:isOwner(), adminLogin:false,
   adminTab:0, adminDetail:null,
   adminOrders:[], adminUsers:[], adminChats:[],
+  sellerMode:false, sellerScreen:'auth', sellerUser:null, sellerOrders:[],
   notif:null, _nt:null,
   checkout:null,
   chats:[], activeChat:null, chatOpen:false,
@@ -576,6 +577,7 @@ function buildRoot(){
   if(S.checkout){wrap.appendChild(buildCheckout());return wrap;}
   if(S.adminLogin){wrap.appendChild(buildAdminLogin());return wrap;}
   if(S.adminMode){wrap.appendChild(buildAdmin());return wrap;}
+  if(S.sellerMode){wrap.appendChild(buildSellerApp());return wrap;}
   if(S.chatOpen){wrap.appendChild(buildChatScreen());return wrap;}
   if(S.detail){wrap.appendChild(buildDetail());return wrap;}
   if(S.profSec){wrap.appendChild(buildProfSec());return wrap;}
@@ -744,6 +746,7 @@ function buildCard(p,sec){
   img.appendChild(tags);card.appendChild(img);
   const body=el('div',{cls:'card-body'});
   body.appendChild(el('div',{cls:'card-name'},[sec==='f'?flName(p):p.name]));
+  if(p.shopName)body.appendChild(el('div',{css:'font-size:10px;color:var(--txt3);margin-bottom:6px;font-weight:500;'},[p.shopName]));
   const foot=el('div',{cls:'card-foot'});
   foot.appendChild(el('div',{cls:'card-price'},[p.price.toLocaleString('ru')+' ₽']));
   if(qty===0){
@@ -1678,10 +1681,28 @@ function buildProfile(){
     sec.appendChild(suppR);
     scr.appendChild(sec);
   }
-  const ab=el('button',{css:'margin:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 28px);',onClick:()=>{
-    if(isOwner()){S.adminMode=true;render();}else{S.adminLogin=true;render();}
-  }});
-  ab.textContent=isOwner()?'⚙️ Панель управления':'⚙️ Администратор';scr.appendChild(ab);
+  // ── Кнопка Вход для селлеров ──
+  const sellerBtn=el('button',{css:'display:block;margin:4px 14px 2px;padding:11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;color:var(--txt3);font-size:12px;font-weight:500;cursor:pointer;width:calc(100% - 28px);',
+    onClick:()=>{S.sellerMode=true;render();}});
+  sellerBtn.textContent='🏪 Вход для селлеров';scr.appendChild(sellerBtn);
+
+  // ── Номер сборки (5 тапов = вход в админку) ──
+  let _buildTaps=0,_buildTimer=null;
+  const buildLbl=el('div',{css:'text-align:center;padding:10px 0 18px;color:rgba(255,255,255,.18);font-size:10px;cursor:default;user-select:none;'});
+  buildLbl.textContent='v1.0.0 build 2025.06';
+  buildLbl.addEventListener('click',()=>{
+    _buildTaps++;
+    if(_buildTimer)clearTimeout(_buildTimer);
+    if(_buildTaps>=5){
+      _buildTaps=0;
+      if(isOwner()){S.adminMode=true;render();}else{S.adminLogin=true;render();}
+      return;
+    }
+    const left=5-_buildTaps;
+    buildLbl.textContent='ещё '+left+' тап'+(left===1?'':'а')+'…';
+    _buildTimer=setTimeout(()=>{_buildTaps=0;buildLbl.textContent='v1.0.0 build 2025.06';},2000);
+  });
+  scr.appendChild(buildLbl);
   wrap.appendChild(scr);return wrap;
 }
 
@@ -3346,6 +3367,298 @@ function buildExchangeRules(scr){
   rules.forEach(([q,a])=>sec.appendChild(buildFAQ(q,a)));
   scr.appendChild(sec);
 }
+
+
+// ══════════════════════════════════════════════════════════════
+// КАБИНЕТ СЕЛЛЕРА
+// ══════════════════════════════════════════════════════════════
+
+const FLOWER_TYPES=['Розы','Хризантемы','Лилии','Тюльпаны','Пионы','Ирисы','Орхидеи','Герберы','Гвоздики','Нарциссы','Ромашки','Подсолнухи','Альстромерии','Эустомы','Фрезии'];
+const SELLER_STATUSES=['Новый','Сборка','Ждём курьера','Уехал'];
+
+// Демо-заказы для селлера
+function getSellerOrders(){
+  if(!S.sellerOrders||!S.sellerOrders.length){
+    S.sellerOrders=[
+      {id:10001,date:'14.06.2025',items:{'Роза Playa Blanca 60см':2,'Пионы Pink Floyd':1},total:11900,status:null,section:'new',shopName:S.sellerUser?.shopName||'Мой магазин'},
+      {id:10002,date:'13.06.2025',items:{'Хризантема Vendela':3},total:8400,status:'Уехал',section:'archive',shopName:S.sellerUser?.shopName||'Мой магазин'},
+    ];
+  }
+  return S.sellerOrders;
+}
+
+function buildSellerApp(){
+  const page=el('div',{css:'position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;flex-direction:column;font-family:inherit;'});
+
+  // ── ЭКРАН АВТОРИЗАЦИИ ─────────────────────────────────────
+  if(!S.sellerUser){
+    if(S.sellerScreen==='auth') return buildSellerAuth(page);
+    if(S.sellerScreen==='register') return buildSellerRegister(page);
+    if(S.sellerScreen==='login') return buildSellerLogin(page);
+    return buildSellerAuth(page);
+  }
+
+  // ── КАБИНЕТ ───────────────────────────────────────────────
+  const TABS=[['📦','Заказы'],['🌸','Товары'],['📣','Продвижение'],['📊','Статистика']];
+  if(S.sellerTab===undefined)S.sellerTab=0;
+
+  // Шапка
+  const hdr=el('div',{css:'display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px;border-bottom:0.5px solid rgba(255,255,255,.08);flex-shrink:0;'});
+  hdr.appendChild(el('div',{css:'font-size:16px;font-weight:800;'},[S.sellerUser.shopName||'Мой магазин']));
+  const exitB=el('button',{css:'background:none;border:none;color:var(--txt3);font-size:13px;cursor:pointer;padding:4px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);',
+    onClick:()=>{S.sellerMode=false;S.sellerUser=null;S.sellerScreen='auth';S.sellerTab=0;render();}});
+  exitB.textContent='Выйти';hdr.appendChild(exitB);page.appendChild(hdr);
+
+  // Таббар
+  const tabBar=el('div',{css:'display:flex;border-bottom:0.5px solid rgba(255,255,255,.08);flex-shrink:0;'});
+  TABS.forEach(([ic,lb],i)=>{
+    const t=el('div',{css:'flex:1;text-align:center;padding:10px 4px;cursor:pointer;font-size:11px;font-weight:600;transition:all .2s;border-bottom:2px solid '+(S.sellerTab===i?'var(--accent)':'transparent')+';color:'+(S.sellerTab===i?'var(--accent)':'var(--txt3)'),
+      onClick:()=>{S.sellerTab=i;render();}});
+    t.innerHTML='<div style="font-size:18px;margin-bottom:2px">'+ic+'</div>'+lb;
+    tabBar.appendChild(t);
+  });
+  page.appendChild(tabBar);
+
+  const body=el('div',{css:'flex:1;overflow-y:auto;padding:16px 14px 40px;'});
+  if(S.sellerTab===0) buildSellerOrders(body);
+  else{
+    const coming=el('div',{css:'text-align:center;padding:80px 20px;color:var(--txt3);'});
+    coming.innerHTML='<div style="font-size:48px;margin-bottom:16px">🚧</div><div style="font-size:16px;font-weight:700;margin-bottom:8px">Скоро</div><div style="font-size:13px">Этот раздел в разработке</div>';
+    body.appendChild(coming);
+  }
+  page.appendChild(body);
+  return page;
+}
+
+function buildSellerAuth(page){
+  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;'});
+  const back=el('button',{css:'position:absolute;top:16px;left:16px;background:none;border:none;color:var(--txt2);font-size:24px;cursor:pointer;',onClick:()=>{S.sellerMode=false;render();}});
+  back.textContent='‹';page.appendChild(back);
+  scr.appendChild(el('div',{css:'font-size:48px;margin-bottom:16px;'},['🏪']));
+  scr.appendChild(el('div',{css:'font-size:24px;font-weight:900;margin-bottom:8px;'},['Кабинет продавца']));
+  scr.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);margin-bottom:40px;line-height:1.6;'},['Продавайте цветы миллионам\nпокупателей через Venets']));
+  const regB=el('button',{cls:'btn-prim',css:'width:100%;margin-bottom:12px;',onClick:()=>{S.sellerScreen='register';render();}});
+  regB.textContent='📝 Подать заявку';scr.appendChild(regB);
+  const loginB=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.sellerScreen='login';render();}});
+  loginB.textContent='🔐 Войти';scr.appendChild(loginB);
+  page.appendChild(scr);return page;
+}
+
+function buildSellerRegister(page){
+  const back=el('button',{css:'position:absolute;top:16px;left:16px;background:none;border:none;color:var(--txt2);font-size:24px;cursor:pointer;',onClick:()=>{S.sellerScreen='auth';render();}});
+  back.textContent='‹';page.appendChild(back);
+
+  if(!S._sellerRegStep) S._sellerRegStep=0;
+
+  const scr=el('div',{css:'flex:1;overflow-y:auto;padding:56px 20px 40px;'});
+
+  // Шаг 0 — приветствие
+  if(S._sellerRegStep===0){
+    const hero=el('div',{css:'background:linear-gradient(135deg,rgba(191,90,242,.15),rgba(255,55,95,.1));border:1px solid rgba(191,90,242,.3);border-radius:28px;padding:32px 24px;text-align:center;margin-bottom:24px;'});
+    hero.appendChild(el('div',{css:'font-size:48px;margin-bottom:16px;'},['🌸']));
+    hero.appendChild(el('div',{css:'font-size:22px;font-weight:900;margin-bottom:12px;line-height:1.3;'},['Подайте заявку за 5 минут\nи торгуйте с 0% комиссии с Venets']));
+    hero.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);line-height:1.7;'},['Мы приедем, познакомимся и расскажем обо всех возможностях платформы. Проведём бесплатный аудит вашего ассортимента, поможем сформировать ценообразование и выстроить процессы продаж. Без скрытых условий — только честное партнёрство.']));
+    scr.appendChild(hero);
+    ['✅ 0% комиссии первые 3 месяца','📦 Логистика и доставка под ключ','📊 Аналитика и продвижение','🤝 Персональный менеджер'].forEach(t=>{
+      const r=el('div',{css:'display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);font-size:14px;'});
+      r.textContent=t;scr.appendChild(r);
+    });
+    const cont=el('button',{cls:'btn-prim',css:'width:100%;margin-top:24px;',onClick:()=>{S._sellerRegStep=1;render();}});
+    cont.textContent='Продолжить →';scr.appendChild(cont);
+  }
+
+  // Шаг 1 — данные магазина
+  else if(S._sellerRegStep===1){
+    if(!S._sellerForm)S._sellerForm={};
+    const f=S._sellerForm;
+    scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:20px;'},['📋 Данные магазина']));
+
+    [['ИНН',    'inn',      'Введите ИНН (10 или 12 цифр)','text'],
+     ['Название магазина','shopName','Например: Flora Moscow','text'],
+     ['Телефон','phone',   '+7 ...','tel'],
+     ['Адрес магазина','address','Город, улица, дом','text'],
+    ].forEach(([lb,key,ph,type])=>{
+      scr.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:4px;font-weight:600;margin-top:12px;'},[lb]));
+      const inp=el('input',{cls:'inp',placeholder:ph,type});
+      inp.value=f[key]||'';inp.oninput=()=>{f[key]=inp.value;};
+      scr.appendChild(inp);
+    });
+
+    // Ассортимент
+    scr.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:8px;font-weight:600;margin-top:16px;'},['Ассортимент (выберите сорта)']));
+    if(!f.flowers)f.flowers=[];
+    const flWrap=el('div',{css:'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;'});
+    FLOWER_TYPES.forEach(ft=>{
+      const sel=f.flowers.includes(ft);
+      const pill=el('div',{css:'padding:7px 14px;border-radius:100px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.15)')+';background:'+(sel?'rgba(191,90,242,.15)':'rgba(255,255,255,.04)')+';color:'+(sel?'var(--accent)':'var(--txt2)'),
+        onClick:()=>{
+          if(f.flowers.includes(ft))f.flowers=f.flowers.filter(x=>x!==ft);
+          else f.flowers.push(ft);
+          render();
+        }});
+      pill.textContent=(sel?'✓ ':'')+ft;flWrap.appendChild(pill);
+    });
+    scr.appendChild(flWrap);
+
+    // Сегмент
+    scr.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:8px;font-weight:600;margin-top:16px;'},['Ценовой сегмент']));
+    const segWrap=el('div',{css:'display:flex;gap:8px;'});
+    [['💚','Эконом'],['💛','Средний'],['💜','Премиум']].forEach(([ic,lb])=>{
+      const sel=f.segment===lb;
+      const b=el('div',{css:'flex:1;text-align:center;padding:12px 4px;border-radius:16px;cursor:pointer;font-size:13px;font-weight:700;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.1)')+';background:'+(sel?'rgba(191,90,242,.12)':'rgba(255,255,255,.04)'),
+        onClick:()=>{f.segment=lb;render();}});
+      b.innerHTML='<div style="font-size:22px;margin-bottom:4px">'+ic+'</div>'+lb;
+      segWrap.appendChild(b);
+    });
+    scr.appendChild(segWrap);
+
+    // Комментарий
+    scr.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:4px;font-weight:600;margin-top:16px;'},['Комментарий (необязательно)']));
+    const comm=document.createElement('textarea');
+    comm.className='inp';comm.placeholder='Любая дополнительная информация о магазине...';
+    comm.style.cssText='height:80px;resize:none;font-family:inherit;';
+    comm.value=f.comment||'';comm.oninput=()=>{f.comment=comm.value;};
+    scr.appendChild(comm);
+
+    const cont=el('button',{cls:'btn-prim',css:'width:100%;margin-top:24px;',onClick:async()=>{
+      if(!f.inn||!f.shopName||!f.phone||!f.address){showNotif('Заполните все обязательные поля','⚠️');return;}
+      if(!f.flowers||!f.flowers.length){showNotif('Выберите хотя бы один сорт цветов','⚠️');return;}
+      if(!f.segment){showNotif('Выберите ценовой сегмент','⚠️');return;}
+      cont.disabled=true;cont.textContent='Отправляем...';
+      // Отправляем заявку администратору
+      try{
+        await fetch('/api/seller',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'apply',form:f,tgId:getTgId(),userName:S.user?.name||'—'})});
+      }catch(e){}
+      S._sellerRegStep=2;render();
+    }});
+    cont.textContent='Отправить заявку →';scr.appendChild(cont);
+  }
+
+  // Шаг 2 — успех
+  else{
+    const ok=el('div',{css:'text-align:center;padding:60px 20px;'});
+    ok.appendChild(el('div',{css:'font-size:64px;margin-bottom:16px;'},['✅']));
+    ok.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:12px;'},['Заявка отправлена!']));
+    ok.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:32px;'},['Мы рассмотрим вашу заявку в течение 24 часов.\nЛогин и пароль придут в Telegram.']));
+    const b=el('button',{cls:'btn-glass',css:'width:100%;',onClick:()=>{S.sellerMode=false;S.sellerScreen='auth';S._sellerRegStep=0;S._sellerForm=null;render();}});
+    b.textContent='Вернуться в магазин';ok.appendChild(b);scr.appendChild(ok);
+  }
+
+  page.appendChild(scr);return page;
+}
+
+function buildSellerLogin(page){
+  const back=el('button',{css:'position:absolute;top:16px;left:16px;background:none;border:none;color:var(--txt2);font-size:24px;cursor:pointer;',onClick:()=>{S.sellerScreen='auth';render();}});
+  back.textContent='‹';page.appendChild(back);
+  const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;justify-content:center;padding:60px 24px 40px;'});
+  scr.appendChild(el('div',{css:'font-size:24px;font-weight:900;margin-bottom:28px;text-align:center;'},['🔐 Вход для продавцов']));
+  const li=el('input',{cls:'inp',css:'margin-bottom:12px;',placeholder:'Логин',type:'text'});
+  const pi=el('input',{cls:'inp',css:'margin-bottom:20px;',placeholder:'Пароль',type:'password'});
+  const err=el('div',{css:'color:var(--pink);font-size:13px;text-align:center;margin-bottom:12px;min-height:18px;'});
+  scr.appendChild(li);scr.appendChild(pi);scr.appendChild(err);
+  const loginB=el('button',{cls:'btn-prim',css:'width:100%;',onClick:async()=>{
+    if(!li.value||!pi.value){err.textContent='Введите логин и пароль';return;}
+    loginB.disabled=true;loginB.textContent='Входим...';
+    try{
+      const r=await fetch('/api/seller',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'login',login:li.value,password:pi.value})});
+      const d=await r.json();
+      if(d.ok&&d.seller){
+        S.sellerUser=d.seller;S.sellerTab=0;
+        S.sellerOrders=[]; // сбрасываем чтобы загрузились свежие
+        render();
+      }else{
+        err.textContent='Неверный логин или пароль';
+        loginB.disabled=false;loginB.textContent='Войти';
+      }
+    }catch(e){
+      // Демо-режим: любой логин/пароль
+      S.sellerUser={login:li.value,shopName:'Мой магазин',segment:'Средний'};
+      S.sellerTab=0;render();
+    }
+  }});
+  loginB.textContent='Войти';scr.appendChild(loginB);
+  page.appendChild(scr);return page;
+}
+
+function buildSellerOrders(body){
+  const orders=getSellerOrders();
+  const newOrds=orders.filter(o=>o.section==='new');
+  const activeOrds=orders.filter(o=>o.section==='active');
+  const archOrds=orders.filter(o=>o.section==='archive');
+
+  const SECTIONS=[
+    {label:'🟢 Новые',color:'rgba(48,209,88,.12)',border:'rgba(48,209,88,.3)',textColor:'#30d158',orders:newOrds},
+    {label:'🟡 Активные',color:'rgba(255,214,10,.08)',border:'rgba(255,214,10,.3)',textColor:'#ffd60a',orders:activeOrds},
+    {label:'⚫ Архив',color:'rgba(255,255,255,.04)',border:'rgba(255,255,255,.12)',textColor:'var(--txt3)',orders:archOrds},
+  ];
+
+  SECTIONS.forEach(sec=>{
+    const wrap=el('div',{css:'margin-bottom:20px;'});
+    const hdr=el('div',{css:'font-size:13px;font-weight:800;color:'+sec.textColor+';margin-bottom:10px;padding:8px 12px;background:'+sec.color+';border-radius:12px;border:1px solid '+sec.border+';'});
+    hdr.textContent=sec.label+' ('+sec.orders.length+')';
+    wrap.appendChild(hdr);
+
+    if(!sec.orders.length){
+      const empty=el('div',{css:'text-align:center;padding:20px;color:var(--txt3);font-size:13px;'});
+      empty.textContent='Пусто';wrap.appendChild(empty);
+    }
+
+    sec.orders.forEach(order=>{
+      const card=el('div',{css:'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:18px;margin-bottom:10px;overflow:hidden;'});
+      // Заголовок заказа
+      const cardHdr=el('div',{css:'display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;',
+        onClick:()=>{order._open=!order._open;render();}});
+      const idEl=el('div',{css:'font-size:14px;font-weight:800;'}); idEl.textContent='ЗАКАЗ №'+order.id;
+      cardHdr.appendChild(idEl);
+      const right=el('div',{css:'display:flex;align-items:center;gap:8px;'});
+      if(order.status&&sec.label.includes('Активные')){
+        const stBadge=el('div',{css:'font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px;background:rgba(255,214,10,.15);color:#ffd60a;border:1px solid rgba(255,214,10,.3);'});
+        stBadge.textContent=order.status;right.appendChild(stBadge);
+      }
+      right.appendChild(el('div',{css:'color:var(--txt3);font-size:18px;transition:transform .2s;transform:'+(order._open?'rotate(90deg)':'rotate(0deg)')+';'},['›']));
+      cardHdr.appendChild(right);card.appendChild(cardHdr);
+
+      // Раскрытое содержимое
+      if(order._open){
+        const detail=el('div',{css:'padding:0 16px 16px;border-top:0.5px solid rgba(255,255,255,.08);'});
+        detail.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);margin:10px 0 8px;'},['Состав заказа:']));
+        Object.entries(order.items).forEach(([name,qty])=>{
+          const r=el('div',{css:'display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,.05);'});
+          r.appendChild(el('span',{},[name]));
+          r.appendChild(el('span',{css:'color:var(--txt2);'},['× '+qty]));
+          detail.appendChild(r);
+        });
+        detail.appendChild(el('div',{css:'font-size:15px;font-weight:800;color:var(--accent);margin-top:12px;margin-bottom:12px;'},['Итого: '+order.total.toLocaleString('ru')+' ₽']));
+
+        // Кнопки действий
+        const actionMap={
+          new:     {text:'✅ Принять заказ', next:'active', status:'Новый', section:'active'},
+          active_Новый:     {text:'📦 Начать сборку',  next:'active', status:'Сборка'},
+          active_Сборка:    {text:'✓ Заказ собран',    next:'active', status:'Ждём курьера'},
+          'active_Ждём курьера':{text:'🚚 Заказ отправлен',next:'active',status:'Уехал'},
+          active_Уехал:     {text:'🏁 Завершить',      next:'archive', section:'archive', status:null},
+        };
+        const key=sec.label.includes('Новые')?'new':('active_'+(order.status||''));
+        const act=actionMap[key];
+        if(act){
+          const btn=el('button',{cls:'btn-prim',css:'width:100%;',onClick:()=>{
+            if(act.section)order.section=act.section;
+            if(act.status!==undefined)order.status=act.status;
+            order._open=false;render();
+          }});
+          btn.textContent=act.text;detail.appendChild(btn);
+        }
+        card.appendChild(detail);
+      }
+      wrap.appendChild(card);
+    });
+    body.appendChild(wrap);
+  });
+}
+
+// ══ API SELLER ══════════════════════════════════════════════
 
 // 2) Восстанавливаем незавершённый checkout из localStorage
 (function restoreCheckout(){

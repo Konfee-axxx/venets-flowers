@@ -190,6 +190,15 @@ module.exports = async function(req, res) {
     catch(e) { return res.status(200).end(JSON.stringify({ ok: true, orders: [] })); }
   }
 
+  // ── Заказы конкретного продавца (для кабинета селлера) ──
+  if (action === 'get_seller_orders' && body.sellerLogin) {
+    try {
+      const all = await getList('orders:list');
+      const mine = all.filter(o => o.sellerLogin === body.sellerLogin);
+      return res.status(200).end(JSON.stringify({ ok: true, orders: mine }));
+    } catch(e) { return res.status(200).end(JSON.stringify({ ok: true, orders: [] })); }
+  }
+
   if (action === 'get_users') {
     try { return res.status(200).end(JSON.stringify({ ok: true, users: await getList('users:list') })); }
     catch(e) { return res.status(200).end(JSON.stringify({ ok: true, users: [] })); }

@@ -1,7 +1,12 @@
 /**
  * seller.js — API кабинета продавца
+ *
+ * КЛЮЧИ В KV:
+ *   sapp:<shortId>       — заявка (pending/approved/rejected)
+ *   seller:<login>       — аккаунт продавца (логин/пароль/данные магазина)
+ *   sellers:index        — массив логинов всех продавцов (для списка в админке)
  */
-const { dbGet, dbSet, dbScan } = require('./db');
+const { dbGet, dbSet } = require('./db');
 const TOKEN = process.env.BOT_TOKEN || '';
 const WURL  = (process.env.WEBAPP_URL || '').replace(/\/+$/, '');
 const ADMIN = process.env.ADMIN_TG_ID || '1146926337';
@@ -25,47 +30,51 @@ function mkLogin(shopName){
     .replace(/[^a-z]/g,'x').slice(0,6)||'seller';
   return base+'_'+Math.floor(Math.random()*9000+1000);
 }
-
-// Короткий числовой ID вместо длинного appId для callback_data
 function makeShortId(){
   return String(Date.now()).slice(-8)+String(Math.floor(Math.random()*999)+1).padStart(3,'0');
 }
 
+async function addToSellerIndex(login){
+  let idx = await dbGet('sellers:index').catch(()=>null);
+  if(!Array.isArray(idx)) idx=[];
+  if(!idx.includes(login)){ idx.push(login); await dbSet('sellers:index', idx, 60*60*24*365); }
+}
+
+// ── Одобрение: аккаунт уже существует (создан при подаче), просто активируем ──
 async function handleApprove(shortId){
-  console.log('[seller] approve shortId:', shortId);
-  
-  // Ищем заявку по shortId
   const app = await dbGet('sapp:'+shortId).catch(()=>null);
-  console.log('[seller] found app:', app ? 'yes' : 'null');
-  
   if(!app) return {ok:false, error:'not_found', shortId};
-  if(app.status==='approved') return {ok:true, already:true, login:app.login, pass:app.pass};
+  if(app.status==='approved'){
+    const existing = await dbGet('seller:'+app.login).catch(()=>null);
+    return {ok:true, already:true, login:app.login, pass: existing?existing.password:app.pass};
+  }
 
-  const login = mkLogin(app.shopName);
-  const pass  = mkPass();
-  const seller = { ...app, login, password:pass, status:'approved', approvedAt:Date.now() };
-
-  await dbSet('seller:'+login, seller, 60*60*24*365);
-  app.status='approved'; app.login=login; app.pass=pass;
+  // Аккаунт уже создан в момент 'apply' (см. ниже), просто меняем статус на active
+  const seller = await dbGet('seller:'+app.login).catch(()=>null);
+  if(seller){
+    seller.status='active';
+    await dbSet('seller:'+app.login, seller, 60*60*24*365);
+  }
+  app.status='approved';
   await dbSet('sapp:'+shortId, app, 60*60*24*30);
 
-  // Уведомляем продавца
+  // Уведомляем продавца — логин/пароль уже были созданы автоматически
   if(app.tgId && TOKEN){
     await tg('sendMessage',{
       chat_id: app.tgId, parse_mode:'HTML',
       text:
-        `🎉 <b>Ваша заявка одобрена!</b>\n\n`+
+        `🎉 <b>Вам одобрили вступление!</b>\n\n`+
         `Добро пожаловать в Venets!\n\n`+
-        `🔐 <b>Данные для входа в кабинет продавца:</b>\n\n`+
-        `Логин: <code>${login}</code>\n`+
-        `Пароль: <code>${pass}</code>\n\n`+
-        `Сохраните эти данные и войдите в кабинет:`,
+        `🔐 <b>Ваш временный логин и пароль:</b>\n\n`+
+        `Логин: <code>${app.login}</code>\n`+
+        `Пароль: <code>${seller?seller.password:app.pass}</code>\n\n`+
+        `Войдите в кабинет продавца и начните работу. Рекомендуем сменить пароль в Настройках.`,
       reply_markup:{inline_keyboard:[[
         {text:'🏪 Открыть кабинет продавца', web_app:{url:WURL}}
       ]]}
     });
   }
-  return {ok:true, login, pass};
+  return {ok:true, login:app.login, pass: seller?seller.password:app.pass};
 }
 
 async function handleReject(shortId){
@@ -74,11 +83,12 @@ async function handleReject(shortId){
   if(app.tgId && TOKEN){
     await tg('sendMessage',{
       chat_id:app.tgId, parse_mode:'HTML',
-      text:`😔 <b>Ваша заявка отклонена</b>\n\nК сожалению, на данный момент мы не можем принять вашу заявку. Вы можете обратиться в поддержку или подать заявку повторно позже.`
+      text:`😔 <b>Заявка отклонена</b>\n\nК сожалению, на данный момент мы не можем принять вашу заявку. Вы можете обратиться в поддержку или подать заявку повторно позже.`
     });
   }
   app.status='rejected';
   await dbSet('sapp:'+shortId, app, 60*60*24*30);
+  // Аккаунт остаётся неактивным (status:'pending'), вход запрещён до одобрения
   return {ok:true};
 }
 
@@ -88,19 +98,33 @@ module.exports = async function(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   if(req.method==='OPTIONS') return res.status(200).end('{}');
 
-  const { action, form, login, password, tgId, userName, shortId, appId } = req.body || {};
-  const sid = shortId || appId; // поддержка обоих полей
+  const { action, form, login, password, tgId, userName, shortId, appId,
+          newLogin, newPassword, newShopName } = req.body || {};
+  const sid = shortId || appId;
 
-  // ── Подача заявки ─────────────────────────────────────────
+  // ── Подача заявки + АВТОСОЗДАНИЕ АККАУНТА ────────────────
   if(action==='apply' && form){
     const sid = makeShortId();
-    const app = { shortId:sid, ...form, tgId, userName, status:'pending', createdAt:Date.now() };
-    
-    // Сохраняем под коротким ключом
-    await dbSet('sapp:'+sid, app, 60*60*24*30);
-    console.log('[seller] saved app sapp:'+sid);
+    const sellerLogin = mkLogin(form.shopName);
+    const sellerPass  = mkPass();
 
-    // Уведомление администратору
+    const app = { shortId:sid, ...form, tgId, userName, status:'pending',
+      login:sellerLogin, pass:sellerPass, createdAt:Date.now() };
+    await dbSet('sapp:'+sid, app, 60*60*24*30);
+
+    // Аккаунт создаётся СРАЗУ на основе введённых данных, но неактивен до одобрения
+    const sellerAcc = {
+      login:sellerLogin, password:sellerPass,
+      shopName:form.shopName, inn:form.inn, phone:form.phone, address:form.address,
+      flowers:form.flowers||[], segment:form.segment, comment:form.comment||'',
+      lat: form.lat?Number(form.lat):null, lon: form.lon?Number(form.lon):null,
+      staticPaymentLink: form.staticPaymentLink||'',
+      tgId, userName, status:'pending', // pending = не может войти, ждёт одобрения
+      appId:sid, createdAt:Date.now()
+    };
+    await dbSet('seller:'+sellerLogin, sellerAcc, 60*60*24*365);
+    await addToSellerIndex(sellerLogin);
+
     if(TOKEN){
       const flowers = (form.flowers||[]).join(', ')||'—';
       const txt =
@@ -114,16 +138,12 @@ module.exports = async function(req, res) {
         `💬 ${form.comment||'—'}\n\n`+
         `👤 ${userName||'—'} (TG: ${tgId||'—'})\n`+
         `🆔 <code>${sid}</code>`;
-      
-      const cbApprove = 'sa_'+sid;   // "sa" = seller approve
-      const cbReject  = 'sr_'+sid;   // "sr" = seller reject
-      console.log('[seller] callback_data lengths:', cbApprove.length, cbReject.length);
-      
+
       await tg('sendMessage',{
         chat_id:ADMIN, parse_mode:'HTML', text:txt,
         reply_markup:{inline_keyboard:[[
-          {text:'✅ Принять', callback_data: cbApprove},
-          {text:'❌ Отклонить', callback_data: cbReject}
+          {text:'✅ Принять', callback_data: 'sa_'+sid},
+          {text:'❌ Отклонить', callback_data: 'sr_'+sid}
         ]]}
       });
     }
@@ -134,36 +154,117 @@ module.exports = async function(req, res) {
   if(action==='check_app' && sid){
     const app = await dbGet('sapp:'+sid).catch(()=>null);
     if(!app) return res.status(200).end(JSON.stringify({ok:true, status:'pending'}));
+    const seller = await dbGet('seller:'+app.login).catch(()=>null);
     return res.status(200).end(JSON.stringify({
       ok:true,
       status: app.status||'pending',
       login:  app.login||null,
-      pass:   app.pass||null
+      pass:   seller?seller.password:(app.pass||null)
     }));
   }
 
-  // ── Одобрение ─────────────────────────────────────────────
+  // ── Одобрение / отклонение ───────────────────────────────
   if(action==='approve' && sid){
-    const result = await handleApprove(sid);
-    return res.status(200).end(JSON.stringify(result));
+    return res.status(200).end(JSON.stringify(await handleApprove(sid)));
   }
-
-  // ── Отклонение ────────────────────────────────────────────
   if(action==='reject' && sid){
-    const result = await handleReject(sid);
-    return res.status(200).end(JSON.stringify(result));
+    return res.status(200).end(JSON.stringify(await handleReject(sid)));
   }
 
-  // ── Вход ─────────────────────────────────────────────────
+  // ── Вход (требует status:'active' или 'approved') ────────
   if(action==='login' && login && password){
     const seller = await dbGet('seller:'+login).catch(()=>null);
     if(!seller || seller.password!==password){
       return res.status(200).end(JSON.stringify({ok:false, error:'wrong'}));
     }
+    if(seller.status==='pending'){
+      return res.status(200).end(JSON.stringify({ok:false, error:'not_approved'}));
+    }
+    if(seller.status==='blocked'){
+      return res.status(200).end(JSON.stringify({ok:false, error:'blocked'}));
+    }
     return res.status(200).end(JSON.stringify({
       ok:true,
-      seller:{login, shopName:seller.shopName, segment:seller.segment, inn:seller.inn}
+      seller:{login, shopName:seller.shopName, segment:seller.segment, inn:seller.inn,
+        phone:seller.phone, address:seller.address, flowers:seller.flowers,
+        lat:seller.lat, lon:seller.lon, staticPaymentLink:seller.staticPaymentLink}
     }));
+  }
+
+  // ── Публичные данные продавца (для расчёта доставки клиентом) ──
+  if(action==='get_public' && login){
+    const seller = await dbGet('seller:'+login).catch(()=>null);
+    if(!seller) return res.status(200).end(JSON.stringify({ok:false}));
+    return res.status(200).end(JSON.stringify({
+      ok:true,
+      seller:{
+        shopName:seller.shopName, lat:seller.lat, lon:seller.lon,
+        staticPaymentLink:seller.staticPaymentLink||''
+      }
+    }));
+  }
+
+  // ── Список всех продавцов (для админки) ──────────────────
+  if(action==='list_sellers'){
+    const idx = await dbGet('sellers:index').catch(()=>null) || [];
+    const sellers = [];
+    for(const lg of idx){
+      const s = await dbGet('seller:'+lg).catch(()=>null);
+      if(s) sellers.push(s);
+    }
+    return res.status(200).end(JSON.stringify({ok:true, sellers}));
+  }
+
+  // ── Админ: изменить логин/пароль продавца ────────────────
+  if(action==='admin_update_seller' && login){
+    const seller = await dbGet('seller:'+login).catch(()=>null);
+    if(!seller) return res.status(200).end(JSON.stringify({ok:false}));
+    if(newPassword) seller.password=newPassword;
+    if(newLogin && newLogin!==login){
+      // Переносим под новым ключом
+      seller.login=newLogin;
+      await dbSet('seller:'+newLogin, seller, 60*60*24*365);
+      await addToSellerIndex(newLogin);
+      // Старый можно оставить помеченным как перемещённый (не критично)
+    } else {
+      await dbSet('seller:'+login, seller, 60*60*24*365);
+    }
+    return res.status(200).end(JSON.stringify({ok:true}));
+  }
+
+  // ── Админ: заблокировать продавца ────────────────────────
+  if(action==='admin_block_seller' && login){
+    const seller = await dbGet('seller:'+login).catch(()=>null);
+    if(!seller) return res.status(200).end(JSON.stringify({ok:false}));
+    seller.status='blocked';
+    await dbSet('seller:'+login, seller, 60*60*24*365);
+    return res.status(200).end(JSON.stringify({ok:true}));
+  }
+
+  // ── Селлер: обновить собственные настройки (название, логин, пароль) ──
+  if(action==='update_settings' && login){
+    const seller = await dbGet('seller:'+login).catch(()=>null);
+    if(!seller) return res.status(200).end(JSON.stringify({ok:false,error:'not_found'}));
+    if(newShopName) seller.shopName=newShopName;
+    if(newPassword) seller.password=newPassword;
+    if(req.body.newLat!==undefined) seller.lat = req.body.newLat?Number(req.body.newLat):null;
+    if(req.body.newLon!==undefined) seller.lon = req.body.newLon?Number(req.body.newLon):null;
+    if(req.body.newPaymentLink!==undefined) seller.staticPaymentLink = req.body.newPaymentLink;
+    let finalLogin=login;
+    if(newLogin && newLogin!==login){
+      const exists = await dbGet('seller:'+newLogin).catch(()=>null);
+      if(exists) return res.status(200).end(JSON.stringify({ok:false,error:'login_taken'}));
+      seller.login=newLogin;
+      await dbSet('seller:'+newLogin, seller, 60*60*24*365);
+      await addToSellerIndex(newLogin);
+      finalLogin=newLogin;
+    } else {
+      await dbSet('seller:'+login, seller, 60*60*24*365);
+    }
+    return res.status(200).end(JSON.stringify({ok:true, seller:{
+      login:finalLogin, shopName:seller.shopName, segment:seller.segment,
+      lat:seller.lat, lon:seller.lon, staticPaymentLink:seller.staticPaymentLink
+    }}));
   }
 
   return res.status(200).end(JSON.stringify({ok:false, error:'unknown_action'}));

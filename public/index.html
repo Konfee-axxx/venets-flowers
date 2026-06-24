@@ -785,6 +785,13 @@ function buildDetail(){
   img.appendChild(tagsW);scr.appendChild(img);
   const cnt=el('div',{css:'padding:20px 18px 0;'});
   cnt.appendChild(el('div',{css:'font-size:22px;font-weight:800;margin-bottom:4px;'},[sec==='f'?flName(p):p.name]));
+  if(p.shopName){
+    const shopBadge=el('div',{css:'display:inline-flex;align-items:center;gap:5px;background:rgba(191,90,242,.1);border:1px solid rgba(191,90,242,.25);border-radius:100px;padding:4px 12px;margin-bottom:8px;cursor:pointer;',
+      onClick:()=>showNotif(p.shopName,'🏪')});
+    shopBadge.appendChild(el('span',{css:'font-size:12px;'},['🏪']));
+    shopBadge.appendChild(el('span',{css:'font-size:12px;font-weight:700;color:var(--accent);'},[p.shopName]));
+    cnt.appendChild(shopBadge);
+  }
   if(sec==='f')cnt.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:10px;'},[txt('Цвет: '+p.color)]));
   const rr=el('div',{css:'display:flex;align-items:center;gap:6px;margin-bottom:14px;'});
   rr.appendChild(el('span',{css:'color:#ffd60a;font-size:14px;'},[txt('★'.repeat(Math.round(p.rating||4)))]));

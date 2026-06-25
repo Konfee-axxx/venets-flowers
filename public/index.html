@@ -4251,6 +4251,33 @@ function buildSellerLogin(page){
   back.textContent='‹';page.appendChild(back);
   const scr=el('div',{css:'flex:1;display:flex;flex-direction:column;justify-content:center;padding:60px 24px 40px;'});
   scr.appendChild(el('div',{css:'font-size:24px;font-weight:900;margin-bottom:28px;text-align:center;'},['🔐 Вход для продавцов']));
+
+  // ── Демо-вход (временный, для тестирования функционала) ──
+  const demoBox=el('div',{css:'background:rgba(255,214,10,.08);border:1px solid rgba(255,214,10,.3);border-radius:16px;padding:14px 16px;margin-bottom:20px;'});
+  demoBox.appendChild(el('div',{css:'font-size:12px;font-weight:700;color:#ffd60a;margin-bottom:8px;'},['🧪 Демо-доступ для тестирования']));
+  demoBox.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.5;'},['Логин: demo_seller\nПароль: demo1234']));
+  const demoBtn=el('button',{cls:'btn-glass',css:'width:100%;font-size:13px;padding:10px;',
+    onClick:()=>{
+      S.sellerUser={
+        login:'demo_seller', shopName:'Demo Магазин 🌸',
+        segment:'Средний', inn:'7701234567',
+        phone:'+7 999 000-00-00', address:'Москва, ул. Цветочная, 1',
+        flowers:['Розы','Пионы','Тюльпаны'],
+        lat:55.7558, lon:37.6173, staticPaymentLink:''
+      };
+      S.sellerTab=0; S.sellerOrders=[]; S._sellerOrdersLoaded=true;
+      // Демо-заказы для наглядности
+      S.sellerOrders=[
+        {id:20001,date:new Date().toLocaleDateString('ru'),items:{'Роза Playa Blanca 60см':3,'Пионы Pink Floyd':1},total:14500,status:null,section:'new',sellerLogin:'demo_seller'},
+        {id:20002,date:new Date().toLocaleDateString('ru'),items:{'Тюльпаны микс 25шт':1},total:4800,status:'Сборка',section:'active',sellerLogin:'demo_seller'},
+        {id:20003,date:new Date(Date.now()-86400000).toLocaleDateString('ru'),items:{'Роза Vendela 80см':5},total:20500,status:'Уехал',section:'active',sellerLogin:'demo_seller'},
+        {id:20004,date:new Date(Date.now()-2*86400000).toLocaleDateString('ru'),items:{'Хризантема Vendela':4},total:11200,status:'Уехал',section:'archive',sellerLogin:'demo_seller'},
+        {id:20005,date:new Date(Date.now()-3*86400000).toLocaleDateString('ru'),items:{'Пионы Playa Blanca':2},total:12400,status:'Уехал',section:'archive',sellerLogin:'demo_seller'},
+      ];
+      render();
+    }});
+  demoBtn.textContent='▶ Войти как Demo Seller';
+  demoBox.appendChild(demoBtn);scr.appendChild(demoBox);
   const li=el('input',{cls:'inp',css:'margin-bottom:12px;',placeholder:'Логин',type:'text'});
   const pi=el('input',{cls:'inp',css:'margin-bottom:20px;',placeholder:'Пароль',type:'password'});
   if(S._sellerPrefillLogin){li.value=S._sellerPrefillLogin;pi.value=S._sellerPrefillPass||'';S._sellerPrefillLogin=null;S._sellerPrefillPass=null;}

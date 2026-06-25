@@ -139,22 +139,20 @@ module.exports = async function(req, res) {
         `👤 ${userName||'—'} (TG: ${tgId||'—'})\n`+
         `🆔 <code>${sid}</code>`;
 
-      await tg('sendMessage',{
+      // Кодируем данные прямо в callback_data — работает без KV
+      // Формат: sa_LOGIN|PASS|TGID|SID  (лимит Telegram: 64 байта)
+      const cbPay = sellerLogin+'|'+sellerPass+'|'+(tgId||'')+'|'+sid;
+      const cbApprove = 'sa_'+cbPay;
+      const cbReject  = 'sr_'+cbPay;
+      // Если не укладываемся в 64 байта — fallback: только sid (требует KV)
+      const btnApprove = {text:'✅ Принять',  callback_data: cbApprove.length<=64 ? cbApprove : 'sa_'+sid};
+      const btnReject  = {text:'❌ Отклонить', callback_data: cbReject.length<=64  ? cbReject  : 'sr_'+sid};
+
+      const tgResult = await tg('sendMessage',{
         chat_id:ADMIN, parse_mode:'HTML', text:txt,
-        reply_markup:{inline_keyboard:[[
-          // Кодируем данные в callback_data — работает БЕЗ KV, без зависимости от памяти
-          // Формат: sa_LOGIN|PASS|TGID|SID (до 64 байт лимит Telegram)
-          (()=>{
-            const pay=sellerLogin+'|'+sellerPass+'|'+(tgId||'')+'|'+sid;
-            const approve='sa_'+pay;
-            const reject='sr_'+pay;
-            // Если укладываемся — шлём с полными данными, иначе fallback на sid
-            return approve.length<=64
-              ? [{text:'✅ Принять',callback_data:approve},{text:'❌ Отклонить',callback_data:reject}]
-              : [{text:'✅ Принять',callback_data:'sa_'+sid},{text:'❌ Отклонить',callback_data:'sr_'+sid}];
-          })()
-        ]]}
+        reply_markup:{inline_keyboard:[[btnApprove, btnReject]]}
       });
+      console.log('[seller] apply TG notify:', JSON.stringify(tgResult?.ok), 'desc:', tgResult?.description);
     }
     return res.status(200).end(JSON.stringify({ok:true, shortId:sid}));
   }

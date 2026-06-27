@@ -117,6 +117,31 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-s
 /* ═══ СЕТКА ═══ */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 12px 120px;align-items:start;}
 
+/* ═══ КАРУСЕЛЬ ═══ */
+/* Высота = половина ширины карточки = (100vw - 24px padding - 10px gap) / 4 */
+.carousel-wrap{position:relative;width:100%;height:calc((100vw - 34px) / 4);overflow:hidden;border-radius:18px;margin:8px 12px 10px;width:calc(100% - 24px);}
+.carousel-track{display:flex;height:100%;transition:transform .55s cubic-bezier(.4,0,.2,1);will-change:transform;}
+.carousel-slide{min-width:100%;height:100%;display:flex;align-items:center;padding:0 18px;position:relative;overflow:hidden;border-radius:18px;}
+.carousel-slide img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:18px;}
+.carousel-slide-content{position:relative;z-index:1;}
+.carousel-emoji{font-size:28px;margin-bottom:2px;}
+.carousel-title{font-size:15px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6);line-height:1.2;}
+.carousel-sub{font-size:11px;color:rgba(255,255,255,.75);text-shadow:0 1px 3px rgba(0,0,0,.5);margin-top:2px;}
+.carousel-dots{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:2;}
+.carousel-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);transition:all .3s;}
+.carousel-dot.active{width:16px;border-radius:3px;background:#fff;}
+
+/* ═══ ПОИСК ═══ */
+.search-wrap{padding:8px 12px 4px;position:relative;}
+.search-inp-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;}
+.search-inp{flex:1;background:none;border:none;outline:none;color:var(--txt);font-size:14px;font-family:inherit;}
+.search-inp::placeholder{color:var(--txt3);}
+.search-dropdown{position:absolute;left:12px;right:12px;top:calc(100% - 4px);background:#1c1c2e;border:1px solid rgba(255,255,255,.12);border-radius:14px;overflow:hidden;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.search-item{padding:11px 16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:0.5px solid rgba(255,255,255,.06);}
+.search-item:last-child{border-bottom:none;}
+.search-item:active{background:rgba(255,255,255,.06);}
+.search-clear{background:none;border:none;color:var(--txt3);font-size:16px;cursor:pointer;padding:2px 4px;}
+
 /* ═══ КАРТОЧКА ═══ */
 .card{
   background:var(--bg2);
@@ -324,6 +349,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 // Координаты склада Venets по умолчанию (используются если товар не привязан к конкретному селлеру-партнёру)
 const VENETS_WAREHOUSE = { lat: 55.7558, lon: 37.6173 }; // центр Москвы
 
+// Карусель: ширина 100%, высота = половина карточки = calc((100vw - 34px) / 4)
+// Администратор может менять слайды, добавлять/убирать их в панели.
+let CAROUSEL_SLIDES = [
+  {id:1,emoji:'🌹',title:'Эквадорские розы',sub:'Прямо с плантаций',bg:'linear-gradient(135deg,#3d0a1a,#1a0a1e)',imgUrl:''},
+  {id:2,emoji:'🌸',title:'Пионы сезона',sub:'Нежность в каждом лепестке',bg:'linear-gradient(135deg,#1a0a3a,#0a1020)',imgUrl:''},
+  {id:3,emoji:'💐',title:'Доставка за 60 мин',sub:'По всей Москве',bg:'linear-gradient(135deg,#0a2a1a,#0a1a10)',imgUrl:''},
+];
+
 let FLOWERS = [
   {id:1,type:'Роза',p:'Playa Blanca',h:60,color:'Красный',price:3200,e:'🌹',tags:['Любимой','Ароматные'],desc:'Насыщенная красная роза с глубоким ароматом. Выращена на горных плантациях Эквадора.',rating:4.9,sold:342,shopName:'Flora Moscow'},
   {id:2,type:'Роза',p:'Vendela',h:80,color:'Белый',price:4100,e:'🤍',tags:['Той самой','Высокие'],desc:'Элегантная кремово-белая роза. Символ чистоты и нежных чувств.',rating:4.8,sold:211,shopName:'Rose Garden'},
@@ -424,6 +457,7 @@ let S = {
   adminTab:0, adminDetail:null,
   adminOrders:[], adminUsers:[], adminChats:[], adminSellers:[],
   sellerMode:false, sellerScreen:'auth', sellerUser:null, sellerOrders:[],
+  searchQuery:'', searchActive:false, searchHistory:[],
   notif:null, _nt:null,
   checkout:null,
   chats:[], activeChat:null, chatOpen:false,
@@ -437,6 +471,8 @@ try{
     const d=JSON.parse(sv);
     S.user=d.u||null;S.cart=d.c||{};S.orders=d.o||[];S.chats=d.ch||[];
     if(d.sw)S.sellerWidgets=d.sw;
+    if(d.sh)S.searchHistory=d.sh;
+    if(d.cs&&d.cs.length)CAROUSEL_SLIDES=d.cs;
     // Восстанавливаем изменения каталога
     if(d.flowers)FLOWERS=d.flowers;
     if(d.gifts)GIFTS=d.gifts;
@@ -444,7 +480,7 @@ try{
   }
 }catch(e){}
 function save(){
-  try{localStorage.setItem('vn4',JSON.stringify({u:S.user,c:S.cart,o:S.orders,ch:S.chats,flowers:FLOWERS,gifts:GIFTS,unread:S.unreadChats,sw:S.sellerWidgets}));}catch(e){}
+  try{localStorage.setItem('vn4',JSON.stringify({u:S.user,c:S.cart,o:S.orders,ch:S.chats,flowers:FLOWERS,gifts:GIFTS,unread:S.unreadChats,sw:S.sellerWidgets,sh:S.searchHistory,cs:CAROUSEL_SLIDES}));}catch(e){}
 }
 
 // ══ ЛОКАЛЬНОЕ ХРАНИЛИЩЕ ЗАКАЗОВ (localStorage) ══════════════════
@@ -682,6 +718,212 @@ function buildNav(){
 // ══════════════════════════════════════════
 // КАТАЛОГИ
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+// КАРУСЕЛЬ
+// ══════════════════════════════════════════
+function buildCarousel(){
+  const slides=CAROUSEL_SLIDES;
+  if(!slides||!slides.length)return null;
+
+  const wrap=el('div',{cls:'carousel-wrap'});
+  const track=el('div',{cls:'carousel-track'});
+  let cur=0;
+  let autoTimer=null;
+
+  slides.forEach(s=>{
+    const slide=el('div',{cls:'carousel-slide'});
+    slide.style.background=s.bg||'linear-gradient(135deg,#1a0a1e,#0a1020)';
+    if(s.imgUrl){
+      const im=document.createElement('img');
+      im.src=s.imgUrl;im.alt='';
+      slide.appendChild(im);
+    }
+    const cnt=el('div',{cls:'carousel-slide-content'});
+    if(s.emoji)cnt.appendChild(el('div',{cls:'carousel-emoji'},[s.emoji]));
+    cnt.appendChild(el('div',{cls:'carousel-title'},[s.title||'']));
+    if(s.sub)cnt.appendChild(el('div',{cls:'carousel-sub'},[s.sub]));
+    slide.appendChild(cnt);
+    track.appendChild(slide);
+  });
+  wrap.appendChild(track);
+
+  // Точки-индикаторы
+  const dots=el('div',{cls:'carousel-dots'});
+  slides.forEach((_,i)=>{
+    const d=el('div',{cls:'carousel-dot'+(i===0?' active':'')});
+    d.addEventListener('click',()=>goTo(i));
+    dots.appendChild(d);
+  });
+  wrap.appendChild(dots);
+
+  function goTo(idx){
+    cur=((idx%slides.length)+slides.length)%slides.length;
+    track.style.transform='translateX(-'+cur*100+'%)';
+    dots.querySelectorAll('.carousel-dot').forEach((d,i)=>d.classList.toggle('active',i===cur));
+  }
+
+  function startAuto(){
+    clearInterval(autoTimer);
+    autoTimer=setInterval(()=>goTo(cur+1),3000);
+  }
+
+  // Свайп пальцем
+  let tx=0;
+  wrap.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;clearInterval(autoTimer);},{passive:true});
+  wrap.addEventListener('touchend',e=>{
+    const dx=tx-e.changedTouches[0].clientX;
+    if(Math.abs(dx)>40)goTo(cur+(dx>0?1:-1));
+    startAuto();
+  },{passive:true});
+
+  startAuto();
+  return wrap;
+}
+
+// ══════════════════════════════════════════
+// ПОИСК
+// ══════════════════════════════════════════
+function buildSearch(){
+  const allItems=[...FLOWERS,...GIFTS];
+  const wrap=el('div',{cls:'search-wrap'});
+
+  const row=el('div',{cls:'search-inp-row'});
+  row.appendChild(el('span',{css:'font-size:14px;color:var(--txt3);'},[txt('🔍')]));
+
+  const inp=document.createElement('input');
+  inp.className='search-inp';
+  inp.placeholder='Поиск цветов, подарков...';
+  inp.value=S.searchQuery||'';
+  inp.setAttribute('autocomplete','off');
+
+  const clearBtn=el('button',{cls:'search-clear',onClick:()=>{
+    S.searchQuery='';S.searchActive=false;inp.value='';
+    hideDropdown();
+    // Патчим только грид без render()
+    refreshGrid();
+  }});
+  clearBtn.textContent='✕';
+  clearBtn.style.display=S.searchQuery?'block':'none';
+
+  // Дропдаун
+  let dropdown=null;
+  function hideDropdown(){dropdown&&dropdown.remove();dropdown=null;}
+
+  function showDropdown(results,query){
+    hideDropdown();
+    if(!results.length&&!S.searchHistory.length&&!query)return;
+    dropdown=el('div',{cls:'search-dropdown'});
+
+    // История (до 3 строк)
+    if(!query&&S.searchHistory.length){
+      const histTitle=el('div',{css:'font-size:10px;font-weight:700;color:var(--txt3);padding:8px 16px 4px;letter-spacing:.5px;'},['ИСТОРИЯ']);
+      dropdown.appendChild(histTitle);
+      S.searchHistory.slice(0,3).forEach(h=>{
+        const it=el('div',{cls:'search-item',onClick:()=>{
+          inp.value=h;S.searchQuery=h;S.searchActive=true;
+          inp.dispatchEvent(new Event('input'));
+        }});
+        it.appendChild(el('span',{css:'color:var(--txt3);font-size:13px;'},[txt('🕐')]));
+        it.appendChild(el('span',{},[h]));
+        dropdown.appendChild(it);
+      });
+    }
+
+    // Результаты / авторекомендации
+    if(results.length){
+      if(!query&&S.searchHistory.length){
+        dropdown.appendChild(el('div',{css:'height:0.5px;background:rgba(255,255,255,.08);margin:4px 0;'}));
+      }
+      results.slice(0,6).forEach(p=>{
+        const pName=p.type&&(p.type==='Роза'||p.type==='Пионы'||p.type==='Хризантема'||p.type==='Тюльпаны'||p.type==='Лилии')?flName(p):p.name;
+        const it=el('div',{cls:'search-item',onClick:()=>{
+          inp.value=pName;S.searchQuery=pName;S.searchActive=true;
+          addToHistory(pName);
+          hideDropdown();refreshGrid();
+          clearBtn.style.display='block';
+        }});
+        it.appendChild(el('span',{css:'font-size:18px;width:24px;text-align:center;'},[p.e]));
+        const info=el('div',{css:'flex:1;min-width:0;'});
+        info.appendChild(el('div',{css:'font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'},[pName]));
+        info.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);'},[p.price.toLocaleString('ru')+' ₽'+(p.shopName?' · '+p.shopName:'')]));
+        it.appendChild(info);
+        dropdown.appendChild(it);
+      });
+    } else if(query){
+      const none=el('div',{css:'padding:16px;text-align:center;color:var(--txt3);font-size:13px;'},['Ничего не найдено 🌿']);
+      dropdown.appendChild(none);
+    }
+
+    wrap.appendChild(dropdown);
+  }
+
+  function addToHistory(q){
+    if(!q)return;
+    S.searchHistory=S.searchHistory.filter(h=>h!==q);
+    S.searchHistory.unshift(q);
+    S.searchHistory=S.searchHistory.slice(0,6);
+    save();
+  }
+
+  // Обновляем грид без render()
+  function refreshGrid(){
+    const q=(S.searchQuery||'').toLowerCase().trim();
+    const gridId=S.tab===0?'flowers-grid':'gifts-grid';
+    const gridEl=document.getElementById(gridId);
+    if(!gridEl)return;
+    const sec=S.tab===0?'f':'g';
+    let items=sec==='f'?[...FLOWERS]:[...GIFTS];
+    if(q)items=items.filter(p=>{
+      const name=(p.type&&(p.type==='Роза'||p.type==='Пионы'||p.type==='Хризантема'||p.type==='Тюльпаны'||p.type==='Лилии'))?flName(p):p.name;
+      return name.toLowerCase().includes(q)||
+        (p.shopName||'').toLowerCase().includes(q)||
+        (p.type||'').toLowerCase().includes(q)||
+        (p.tags||[]).some(t=>t.toLowerCase().includes(q))||
+        (p.desc||'').toLowerCase().includes(q);
+    });
+    items=sortItems(items);
+    gridEl.innerHTML='';
+    items.forEach(p=>gridEl.appendChild(buildCard(p,sec)));
+  }
+
+  inp.addEventListener('focus',()=>{
+    const q=inp.value.toLowerCase().trim();
+    const matches=q?allItems.filter(p=>{
+      const name=(p.type&&(p.type==='Роза'||p.type==='Пионы'||p.type==='Хризантема'||p.type==='Тюльпаны'||p.type==='Лилии'))?flName(p):p.name;
+      return name.toLowerCase().includes(q)||(p.shopName||'').toLowerCase().includes(q)||(p.tags||[]).some(t=>t.toLowerCase().includes(q));
+    }):allItems.slice(0,6);
+    showDropdown(matches,q);
+  });
+
+  inp.addEventListener('input',()=>{
+    const q=inp.value.toLowerCase().trim();
+    S.searchQuery=inp.value;
+    clearBtn.style.display=inp.value?'block':'none';
+    const matches=q?allItems.filter(p=>{
+      const name=(p.type&&(p.type==='Роза'||p.type==='Пионы'||p.type==='Хризантема'||p.type==='Тюльпаны'||p.type==='Лилии'))?flName(p):p.name;
+      return name.toLowerCase().includes(q)||(p.shopName||'').toLowerCase().includes(q)||(p.type||'').toLowerCase().includes(q)||(p.tags||[]).some(t=>t.toLowerCase().includes(q));
+    }):[];
+    showDropdown(matches,q);
+    if(q){S.searchActive=true;refreshGrid();}
+    else{S.searchActive=false;refreshGrid();}
+  });
+
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      const q=inp.value.trim();
+      if(q){addToHistory(q);}
+      hideDropdown();inp.blur();refreshGrid();
+    }
+    if(e.key==='Escape'){S.searchQuery='';S.searchActive=false;inp.value='';hideDropdown();refreshGrid();clearBtn.style.display='none';}
+  });
+
+  document.addEventListener('click',e=>{if(!wrap.contains(e.target))hideDropdown();},{once:false,capture:false});
+
+  row.appendChild(inp);row.appendChild(clearBtn);
+  wrap.appendChild(row);
+  return wrap;
+}
+
 function buildFlowers(){
   const wrap=el('div',{css:'display:flex;flex-direction:column;height:100%;overflow:hidden;'});
   const hdr=el('div',{cls:'hdr'});
@@ -693,14 +935,30 @@ function buildFlowers(){
   }
   wrap.appendChild(hdr);
   const scr=el('div',{cls:'scroll'});
+
+  // Поиск
+  scr.appendChild(buildSearch());
+
+  // Карусель (только на вкладке цветов, перед карточками)
+  const car=buildCarousel();
+  if(car)scr.appendChild(car);
+
   scr.appendChild(buildFSBar());
+
+  // Фильтрация с учётом поиска
+  const q=(S.searchQuery||'').toLowerCase().trim();
   let items=[...FLOWERS];
   const f=S.ff;
   if(f.types.length)items=items.filter(i=>f.types.includes(i.type));
   if(f.minP>0||f.maxP<8000)items=items.filter(i=>i.price>=f.minP&&i.price<=f.maxP);
   if(f.minH>50||f.maxH<100)items=items.filter(i=>i.h>=f.minH&&i.h<=f.maxH);
+  if(q)items=items.filter(p=>{
+    const name=flName(p);
+    return name.toLowerCase().includes(q)||(p.shopName||'').toLowerCase().includes(q)||(p.type||'').toLowerCase().includes(q)||(p.tags||[]).some(t=>t.toLowerCase().includes(q));
+  });
   items=sortItems(items);
-  const grid=el('div',{cls:'grid'});
+
+  const grid=el('div',{cls:'grid',id:'flowers-grid'});
   items.forEach(p=>grid.appendChild(buildCard(p,'f')));
   scr.appendChild(grid);
   wrap.appendChild(scr);
@@ -717,7 +975,11 @@ function buildGifts(){
   }
   wrap.appendChild(hdr);
   const scr=el('div',{cls:'scroll'});
+
+  scr.appendChild(buildSearch());
   scr.appendChild(buildFSBar());
+
+  const q=(S.searchQuery||'').toLowerCase().trim();
   let items=[...GIFTS];
   const f=S.gf;
   if(f.type)items=items.filter(i=>i.type===f.type);
@@ -725,8 +987,12 @@ function buildGifts(){
   if(f.halal)items=items.filter(i=>i.halal);
   if(f.noNuts)items=items.filter(i=>i.noNuts);
   if(f.minP>0||f.maxP<5000)items=items.filter(i=>i.price>=f.minP&&i.price<=f.maxP);
+  if(q)items=items.filter(p=>{
+    return p.name.toLowerCase().includes(q)||(p.shopName||'').toLowerCase().includes(q)||(p.type||'').toLowerCase().includes(q)||(p.tags||[]).some(t=>t.toLowerCase().includes(q));
+  });
   items=sortItems(items);
-  const grid=el('div',{cls:'grid'});
+
+  const grid=el('div',{cls:'grid',id:'gifts-grid'});
   items.forEach(p=>grid.appendChild(buildCard(p,'g')));
   scr.appendChild(grid);
   wrap.appendChild(scr);
@@ -3308,6 +3574,77 @@ function buildAdminUsers(scr){
 
 function buildAdminCatalog(scr){
   scr.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:14px;'},['🌸 Каталог']));
+
+  // ── Редактор карусели ──────────────────────────────────
+  const carSec=el('div',{css:'background:rgba(255,255,255,.04);border-radius:20px;padding:16px;margin-bottom:20px;border:1px solid rgba(255,255,255,.08);'});
+  carSec.appendChild(el('div',{css:'font-size:15px;font-weight:800;margin-bottom:4px;'},['🎠 Карусель на главной']));
+  carSec.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);margin-bottom:12px;'},['Размер слайдов: полная ширина × половина высоты карточки. Менять фото → вставьте URL в поле «Фото».']));
+
+  const slidesWrap=el('div',{id:'admin-carousel-slides'});
+  function renderCarouselEditor(){
+    slidesWrap.innerHTML='';
+    CAROUSEL_SLIDES.forEach((s,i)=>{
+      const card=el('div',{css:'background:rgba(255,255,255,.04);border-radius:14px;padding:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,.07);'});
+
+      // Превью
+      const prev=el('div',{css:'width:100%;height:52px;border-radius:10px;margin-bottom:10px;display:flex;align-items:center;padding:0 14px;gap:10px;overflow:hidden;position:relative;'});
+      prev.style.background=s.bg||'#222';
+      if(s.imgUrl){const img=document.createElement('img');img.src=s.imgUrl;img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;';prev.appendChild(img);}
+      const prevTxt=el('div',{css:'position:relative;z-index:1;'});
+      prevTxt.appendChild(el('div',{css:'font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6);'},[s.title||'—']));
+      if(s.sub)prevTxt.appendChild(el('div',{css:'font-size:10px;color:rgba(255,255,255,.7);'},[s.sub]));
+      prev.appendChild(prevTxt);
+      card.appendChild(prev);
+
+      // Поля редактирования
+      const fields=[['Заголовок','title',s.title||''],['Подзаголовок','sub',s.sub||''],['Эмодзи','emoji',s.emoji||''],['Фото URL','imgUrl',s.imgUrl||''],['Фон (CSS gradient/color)','bg',s.bg||'']];
+      fields.forEach(([lb,key,val])=>{
+        const inp=el('input',{cls:'inp',placeholder:lb,css:'margin-bottom:6px;font-size:12px;padding:8px 12px;'});
+        inp.value=val;
+        inp.oninput=()=>{s[key]=inp.value;
+          // Обновляем превью без render()
+          prev.style.background=s.bg||'#222';
+          prevTxt.querySelector('div').textContent=s.title||'—';
+        };
+        card.appendChild(inp);
+      });
+
+      // Кнопки порядка + удалить
+      const btnRow=el('div',{css:'display:flex;gap:6px;margin-top:6px;'});
+      if(i>0){const u=el('button',{cls:'btn-glass',css:'padding:6px 10px;font-size:12px;',onClick:()=>{[CAROUSEL_SLIDES[i-1],CAROUSEL_SLIDES[i]]=[CAROUSEL_SLIDES[i],CAROUSEL_SLIDES[i-1]];save();renderCarouselEditor();}});u.textContent='▲';btnRow.appendChild(u);}
+      if(i<CAROUSEL_SLIDES.length-1){const d=el('button',{cls:'btn-glass',css:'padding:6px 10px;font-size:12px;',onClick:()=>{[CAROUSEL_SLIDES[i+1],CAROUSEL_SLIDES[i]]=[CAROUSEL_SLIDES[i],CAROUSEL_SLIDES[i+1]];save();renderCarouselEditor();}});d.textContent='▼';btnRow.appendChild(d);}
+      const del=el('button',{css:'padding:6px 10px;font-size:12px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);border-radius:10px;cursor:pointer;margin-left:auto;',
+        onClick:()=>{CAROUSEL_SLIDES.splice(i,1);save();renderCarouselEditor();}});
+      del.textContent='✕ Удалить';btnRow.appendChild(del);
+      card.appendChild(btnRow);
+      slidesWrap.appendChild(card);
+    });
+  }
+  renderCarouselEditor();
+  carSec.appendChild(slidesWrap);
+
+  // Добавить слайд
+  const addSlideB=el('button',{cls:'btn-glass',css:'width:100%;margin-top:4px;',onClick:()=>{
+    const maxId=CAROUSEL_SLIDES.reduce((m,s)=>Math.max(m,s.id||0),0);
+    CAROUSEL_SLIDES.push({id:maxId+1,emoji:'🌸',title:'Новый слайд',sub:'',bg:'linear-gradient(135deg,#1a0a3a,#0a1020)',imgUrl:''});
+    save();renderCarouselEditor();
+    showNotif('Слайд добавлен','✅');
+  }});
+  addSlideB.textContent='+ Добавить слайд';carSec.appendChild(addSlideB);
+
+  // Сохранить в KV (для синхронизации между устройствами)
+  const saveCarB=el('button',{cls:'btn-prim',css:'width:100%;margin-top:10px;',onClick:async()=>{
+    saveCarB.disabled=true;saveCarB.textContent='Сохраняем...';
+    try{
+      await fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'set',carousel:CAROUSEL_SLIDES})});
+      showNotif('Карусель сохранена!','✅');
+    }catch(e){showNotif('Ошибка сохранения','⚠️');}
+    saveCarB.disabled=false;saveCarB.textContent='💾 Сохранить карусель в БД';
+  }});
+  saveCarB.textContent='💾 Сохранить карусель в БД';carSec.appendChild(saveCarB);
+  scr.appendChild(carSec);
+
   if(S.adminDetail&&S.adminDetail._editItem){
     const item=S.adminDetail._editItem;
     const isFlower=FLOWERS.includes(item);
@@ -4537,6 +4874,9 @@ function buildSellerOrders(body){
       }
       if(d.gifts&&d.gifts.length&&JSON.stringify(d.gifts)!==JSON.stringify(GIFTS)){
         GIFTS=d.gifts;changed=true;
+      }
+      if(d.carousel&&d.carousel.length&&JSON.stringify(d.carousel)!==JSON.stringify(CAROUSEL_SLIDES)){
+        CAROUSEL_SLIDES=d.carousel;changed=true;
       }
       if(changed&&!S.checkout&&!S.onboard){
         // Бесшовно обновляем только контент без перерисовки шапки/таббара

@@ -867,19 +867,19 @@ function buildSearch(){
     const otherSec=sec==='f'?'g':'f';
     const otherItems=(otherSec==='f'?[...FLOWERS]:[...GIFTS]).filter(p=>getItemName(p).toLowerCase().includes(q));
     if(otherItems.length){
-      const msg=el('div',{css:'padding:40px 20px;text-align:center;'});
-      msg.appendChild(el('div',{css:'font-size:48px;margin-bottom:12px;'},['🔎']));
-      msg.appendChild(el('div',{css:'font-size:16px;font-weight:700;margin-bottom:8px;'},['В этом разделе не найдено']));
-      msg.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:20px;line-height:1.5;'},['Но «'+q+'» есть в разделе «'+(otherSec==='g'?'Подарки 🎁':'Цветы 🌸')+'»']));
-      const goB=el('button',{cls:'btn-prim',css:'padding:12px 24px;',onClick:()=>{S.tab=otherSec==='f'?0:1;render();}});
+      const msg=el('div',{css:'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:40px 24px;text-align:center;'});
+      msg.appendChild(el('div',{css:'font-size:64px;margin-bottom:16px;'},['🔎']));
+      msg.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:10px;'},['В этом разделе не найдено']));
+      msg.appendChild(el('div',{css:'font-size:14px;color:var(--txt2);margin-bottom:28px;line-height:1.6;'},['Но «'+q+'» есть в разделе\n«'+(otherSec==='g'?'Подарки 🎁':'Цветы 🌸')+'»']));
+      const goB=el('button',{cls:'btn-prim',css:'padding:14px 32px;font-size:16px;',onClick:()=>{S.tab=otherSec==='f'?0:1;render();}});
       goB.textContent='Перейти в '+(otherSec==='g'?'Подарки 🎁':'Цветы 🌸');
       msg.appendChild(goB);
       gridEl.appendChild(msg);
     } else {
-      const msg=el('div',{css:'padding:60px 20px;text-align:center;'});
-      msg.appendChild(el('div',{css:'font-size:64px;margin-bottom:12px;'},['😔']));
-      msg.appendChild(el('div',{css:'font-size:18px;font-weight:700;margin-bottom:6px;'},['Ничего не найдено']));
-      msg.appendChild(el('div',{css:'font-size:13px;color:var(--txt3);'},['Попробуйте другой запрос']));
+      const msg=el('div',{css:'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:40px 24px;text-align:center;'});
+      msg.appendChild(el('div',{css:'font-size:72px;margin-bottom:16px;'},['😔']));
+      msg.appendChild(el('div',{css:'font-size:20px;font-weight:800;margin-bottom:8px;'},['Ничего не найдено']));
+      msg.appendChild(el('div',{css:'font-size:14px;color:var(--txt3);'},['Попробуйте другой запрос']));
       gridEl.appendChild(msg);
     }
   }

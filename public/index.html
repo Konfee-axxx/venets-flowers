@@ -3780,15 +3780,55 @@ function buildAdminCatalog(scr){
     scr.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:10px;margin-bottom:5px;'},['Фото']));
     if(item.imgUrl)scr.appendChild(el('img',{src:item.imgUrl,css:'width:80px;height:80px;border-radius:12px;object-fit:cover;margin-bottom:8px;'}));
     const fileInp=el('input',{type:'file',accept:'image/*',css:'margin-bottom:8px;color:var(--txt2);font-size:13px;'});
-    fileInp.onchange=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{item.imgUrl=r.result;render();};r.readAsDataURL(f);};
+    fileInp.onchange=async(e)=>{
+      const f=e.target.files[0];if(!f)return;
+      // Сжимаем через canvas перед отправкой
+      const bmp=await createImageBitmap(f).catch(()=>null);
+      let imgData;
+      if(bmp){
+        const MAX=800;
+        const scale=Math.min(1,MAX/Math.max(bmp.width,bmp.height));
+        const cv=document.createElement('canvas');cv.width=Math.round(bmp.width*scale);cv.height=Math.round(bmp.height*scale);
+        cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);
+        imgData=cv.toDataURL('image/jpeg',0.82);
+      } else {
+        const r2=new FileReader();imgData=await new Promise(res=>{r2.onload=()=>res(r2.result);r2.readAsDataURL(f);});
+      }
+      // Показываем превью локально сразу
+      item.imgUrl=imgData;render();
+      // Заливаем в KV
+      try{
+        const resp=await fetch('/api/images',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'upload',itemId:String(item.id),imgData})});
+        const d=await resp.json();
+        if(d.ok){
+          item.imgKey='img:'+String(item.id);
+          // В каталоге НЕ храним base64 — только ключ
+          item.imgUrl=imgData; // только для локального показа
+          // Сохраняем каталог в KV (без base64 — только ключи)
+          const catalogFlowers=FLOWERS.map(p=>({...p,imgUrl:p.imgKey?'__kv__':''}));
+          const catalogGifts=GIFTS.map(p=>({...p,imgUrl:p.imgKey?'__kv__':''}));
+          fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'set',flowers:catalogFlowers,gifts:catalogGifts})}).catch(()=>{});
+          showNotif('Фото загружено и сохранено в БД ✅');
+        } else {
+          showNotif(d.hint||'Ошибка загрузки фото','⚠️');
+        }
+      }catch(ex){showNotif('Ошибка сети','⚠️');}
+    };
     scr.appendChild(fileInp);
-    const sv=el('button',{cls:'btn-prim',css:'margin-top:14px;',onClick:()=>{
+    const sv=el('button',{cls:'btn-prim',css:'margin-top:14px;',onClick:async()=>{
       Object.entries(inputs).forEach(([k,inp])=>{if(inp.value)item[k]=isNaN(inp.value)?inp.value:+inp.value;});
       item.tags=tagI.value.split(',').map(t=>t.trim()).filter(Boolean);
       addLog('Изменён товар: '+(item.name||flName(item)),'');
-      // Синхронизируем каталог с сервером
-      fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'set',flowers:FLOWERS,gifts:GIFTS})}).catch(()=>{});
+      // В KV отправляем без base64 (фото хранятся отдельно в img:ID)
+      const stripImg=p=>({...p,imgUrl:(p.imgKey||p.imgUrl==='__kv__')?'__kv__':(p.imgUrl&&p.imgUrl.startsWith('data:')?'':p.imgUrl)});
+      sv.disabled=true;sv.textContent='Сохраняем...';
+      try{
+        await fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'set',flowers:FLOWERS.map(stripImg),gifts:GIFTS.map(stripImg)})});
+      }catch(e){}
+      sv.disabled=false;sv.textContent='Сохранить';
       save();showNotif('Сохранено ✅');render();
     }});sv.textContent='Сохранить';scr.appendChild(sv);
     const del=el('button',{css:'width:100%;margin-top:10px;padding:14px;border-radius:16px;border:1px solid rgba(255,55,95,.4);background:rgba(255,55,95,.1);color:var(--pink);font-size:14px;font-weight:600;cursor:pointer;',
@@ -4993,20 +5033,36 @@ function buildSellerOrders(body){
       if(d.carousel&&d.carousel.length&&JSON.stringify(d.carousel)!==JSON.stringify(CAROUSEL_SLIDES)){
         CAROUSEL_SLIDES=d.carousel;changed=true;
       }
+
+      // Подгружаем изображения из KV для товаров у которых есть imgKey или imgUrl='__kv__'
+      const allItems=[...FLOWERS,...GIFTS];
+      const keysToFetch=[...new Set(
+        allItems
+          .filter(p=>p.imgKey||(p.imgUrl==='__kv__'))
+          .map(p=>p.imgKey||('img:'+String(p.id)))
+      )];
+      if(keysToFetch.length){
+        try{
+          const ir=await fetch('/api/images',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'get_batch',keys:keysToFetch})});
+          const id=await ir.json();
+          if(id.ok&&id.images){
+            allItems.forEach(p=>{
+              const k=p.imgKey||('img:'+String(p.id));
+              if(id.images[k]){p.imgUrl=id.images[k];changed=true;}
+            });
+          }
+        }catch(e){}
+      }
+
       if(changed&&!S.checkout&&!S.onboard){
-        // Бесшовно обновляем только контент без перерисовки шапки/таббара
         const body=document.getElementById('main-content');
-        if(body){
-          body.innerHTML='';
-          buildMainContent(body);
-        }else{
-          render();
-        }
+        if(body){body.innerHTML='';buildMainContent(body);}
+        else render();
       }
     }catch(e){}
   }
   await fetchCatalog();
-  // Проверяем обновления каталога каждые 30 секунд
   setInterval(fetchCatalog, 30000);
 })();
 

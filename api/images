@@ -1,0 +1,60 @@
+/**
+ * images.js — хранилище изображений товаров в Vercel KV
+ * 
+ * POST { action:'upload', itemId, imgData }  → { ok, key }
+ * POST { action:'get', key }                 → { ok, imgData }
+ * POST { action:'delete', key }              → { ok }
+ * 
+ * Каждое изображение хранится отдельно: img:ITEMID
+ * Это позволяет избежать ограничения 5MB на ключ catalog:flowers
+ */
+const { dbGet, dbSet, dbDel } = require('./db');
+
+module.exports = async function(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(200).end('{}');
+
+  const { action, itemId, imgData, key } = req.body || {};
+
+  // Загрузка изображения
+  if (action === 'upload' && itemId && imgData) {
+    const k = 'img:' + String(itemId);
+    try {
+      // Проверяем размер — base64 изображение не должно превышать 4MB
+      if (imgData.length > 4 * 1024 * 1024) {
+        return res.status(200).end(JSON.stringify({ ok: false, error: 'too_large', hint: 'Сожмите изображение до < 3MB' }));
+      }
+      await dbSet(k, imgData, 60 * 60 * 24 * 365); // 1 год
+      return res.status(200).end(JSON.stringify({ ok: true, key: k }));
+    } catch(e) {
+      return res.status(200).end(JSON.stringify({ ok: false, error: e.message }));
+    }
+  }
+
+  // Получение изображения
+  if (action === 'get' && key) {
+    const data = await dbGet(key).catch(() => null);
+    if (!data) return res.status(200).end(JSON.stringify({ ok: false }));
+    return res.status(200).end(JSON.stringify({ ok: true, imgData: data }));
+  }
+
+  // Пакетное получение (список ключей)
+  if (action === 'get_batch' && Array.isArray(req.body.keys)) {
+    const result = {};
+    await Promise.all(req.body.keys.map(async k => {
+      const data = await dbGet(k).catch(() => null);
+      if (data) result[k] = data;
+    }));
+    return res.status(200).end(JSON.stringify({ ok: true, images: result }));
+  }
+
+  // Удаление
+  if (action === 'delete' && key) {
+    await dbDel(key).catch(() => {});
+    return res.status(200).end(JSON.stringify({ ok: true }));
+  }
+
+  return res.status(200).end(JSON.stringify({ ok: false, error: 'unknown_action' }));
+};

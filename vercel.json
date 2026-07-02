@@ -9,6 +9,8 @@
     { "src": "/api/catalog",     "dest": "/api/catalog.js" },
     { "src": "/api/referral",    "dest": "/api/referral.js" },
     { "src": "/api/seller",      "dest": "/api/seller.js" },
+    { "src": "/api/images",      "dest": "/api/images.js" },
+    { "src": "/api/export",      "dest": "/api/export.js" },
     { "src": "/api/status",      "dest": "/api/status.js" },
     { "src": "/api/setup",       "dest": "/api/setup.js" },
     { "src": "/(.*)",            "dest": "/index.html" }

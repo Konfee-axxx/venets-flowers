@@ -3170,7 +3170,21 @@ function buildAdmin(){
     S._adminSyncTimer=setInterval(syncAdminData, 5000);
     syncAdminData(); // сразу при открытии
   }
+  // Проверяем хранилище (один раз за сессию)
+  if(!S._storageChecked){
+    S._storageChecked=true;
+    fetch('/api/status').then(r=>r.json()).then(sd=>{
+      if(sd.storage&&!sd.storage_ok){
+        const warn=document.getElementById('admin-storage-warn');
+        if(warn)warn.style.display='block';
+      }
+    }).catch(()=>{});
+  }
   const page=el('div',{cls:'admin-page'});
+  // Баннер предупреждения о хранилище (скрыт по умолчанию, показывается если KV не подключён)
+  const warnBanner=el('div',{id:'admin-storage-warn',css:'display:none;background:#ff3b30;color:#fff;font-size:11px;font-weight:700;padding:7px 14px;text-align:center;flex-shrink:0;line-height:1.4;'});
+  warnBanner.textContent='⚠️ БД не подключена — данные хранятся в памяти и теряются при перезапуске! Vercel Dashboard → Storage → Create KV Store → Connect to project → Redeploy';
+  page.appendChild(warnBanner);
   const hdr=el('div',{cls:'hdr'});
   hdr.appendChild(el('button',{cls:'back-btn',onClick:()=>{
     if(S._adminSyncTimer){clearInterval(S._adminSyncTimer);S._adminSyncTimer=null;}

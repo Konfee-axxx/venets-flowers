@@ -27,10 +27,10 @@
 html.light{
   --bg:#f2f2f7;--bg2:#ffffff;--bg3:#e8e8f0;
   --glass:rgba(255,255,255,0.7);--glass2:rgba(255,255,255,0.9);
-  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.15);
+  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.18);
   --txt:#090910;--txt2:#6060aa;--txt3:#a0a0c0;
   --accent:#9a2ae2;
-  --nav-bg:rgba(242,242,247,.9);
+  --nav-bg:rgba(242,242,247,.95);
   --card-shadow:0 2px 12px rgba(0,0,0,.08);
   --input-bg:rgba(0,0,0,.05);
   --input-border:rgba(0,0,0,.12);
@@ -142,7 +142,7 @@ html.light .theme-toggle-thumb{transform:translateX(18px);background:#fff;}
 /* ═══ ШАПКА ═══ */
 .hdr{
   padding:14px 16px 12px;display:flex;align-items:center;gap:10px;
-  background:rgba(0,0,8,0.75);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
+  background:var(--nav-bg);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
   border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:50;
 }
 .hdr-title{font-size:24px;font-weight:700;flex:1;}
@@ -389,31 +389,68 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 html.light #splash{background:#f2f2f7;}
 html.light #splash .splash-name{color:#090910;}
 html.light #splash .splash-sub{color:rgba(9,9,16,.4);}
-html.light .notif-bar{background:rgba(9,9,16,.85);color:#fff;}
-html.light .search-inp-row{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1);}
-html.light .search-dropdown{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 8px 32px rgba(0,0,0,.12);}
-html.light .search-item:hover{background:rgba(0,0,0,.04);}
-html.light .sheet{background:#fff;}
-html.light .drag{background:rgba(0,0,0,.15);}
-html.light .hdr{border-bottom:0.5px solid rgba(0,0,0,.08);}
-html.light .nav{background:rgba(242,242,247,.92);border-top:0.5px solid rgba(0,0,0,.08);}
-html.light .nav-btn .nav-icon{color:rgba(0,0,0,.3);}
-html.light .nav-label{color:rgba(0,0,0,.3);}
+html.light .notif-bar{background:rgba(9,9,16,.9);color:#fff;}
+
+/* Шапка — белый фон, чёткая тень вместо стекла */
+html.light .hdr{background:rgba(255,255,255,.97)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:1px solid rgba(0,0,0,.1)!important;box-shadow:0 1px 8px rgba(0,0,0,.06);}
+html.light .hdr-title{color:#090910;}
+
+/* Навбар */
+html.light .nav{background:rgba(255,255,255,.97)!important;border-top:1px solid rgba(0,0,0,.1)!important;}
+html.light .nav-btn .nav-icon{color:rgba(0,0,0,.35);}
+html.light .nav-label{color:rgba(0,0,0,.35);}
 html.light .nav-btn.active .nav-icon,html.light .nav-btn.active .nav-label{color:var(--accent);}
-html.light .card{background:#fff;border-color:rgba(0,0,0,.07);box-shadow:0 2px 12px rgba(0,0,0,.08);}
-html.light .card-img{background:linear-gradient(145deg,#f0f0f8,#e8e8f0);}
-html.light .add-btn{box-shadow:0 2px 8px rgba(154,42,226,.25);}
-html.light .inp{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12);color:#090910;}
-html.light .inp:focus{border-color:var(--accent);}
+
+/* Карточки */
+html.light .card{background:#fff!important;border-color:rgba(0,0,0,.08)!important;box-shadow:0 2px 14px rgba(0,0,0,.07);}
+html.light .card-img{background:linear-gradient(145deg,#f2f2f8,#e8e8f2)!important;}
+html.light .card-name{color:#090910;}
+html.light .card-price{color:#090910;}
+
+/* Слоты времени доставки — чёткие грани */
+html.light [data-slot-id]{
+  background:#fff!important;
+  border-color:rgba(0,0,0,.18)!important;
+  color:#090910!important;
+}
+
+/* Инпуты */
+html.light .inp{background:rgba(0,0,0,.04)!important;border-color:rgba(0,0,0,.14)!important;color:#090910!important;}
+html.light .inp::placeholder{color:rgba(0,0,0,.35)!important;}
+html.light .inp:focus{border-color:var(--accent)!important;}
+
+/* Поиск */
+html.light .search-inp-row{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.12);}
+html.light .search-inp{color:#090910;}
+html.light .search-dropdown{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 8px 32px rgba(0,0,0,.12);}
+html.light .search-item{border-bottom-color:rgba(0,0,0,.06);}
+
+/* Фильтры */
 html.light .fbar{background:transparent;}
-html.light .fpill{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#090910;}
+html.light .fpill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#090910;}
 html.light .fpill.on{background:rgba(154,42,226,.1);border-color:var(--accent);color:var(--accent);}
-html.light .btn-glass{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:#090910;}
+
+/* Кнопки */
+html.light .btn-glass{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#090910;}
 html.light .btn-glass:active{background:rgba(0,0,0,.1);}
+
+/* Листы и оверлеи */
+html.light .sheet{background:#fff!important;}
+html.light .drag{background:rgba(0,0,0,.15);}
+html.light .overlay{background:rgba(0,0,0,.35);}
+html.light .sheet-title{color:#090910;}
+
+/* Списки */
 html.light .list-sec{background:#fff;border-color:rgba(0,0,0,.07);}
 html.light .list-row{border-bottom-color:rgba(0,0,0,.06);}
+html.light .list-row:active{background:rgba(0,0,0,.03);}
+
+/* Теги */
+html.light .tag{border-color:rgba(0,0,0,.25);}
+
+/* Checkout */
 html.light .co-page{background:var(--bg);}
-html.light .tag{border-color:rgba(0,0,0,.2);}
+html.light .co-page .hdr{background:rgba(255,255,255,.97)!important;}
 
 /* ═══ ЗАГРУЗОЧНЫЙ ЭКРАН ═══ */
 #splash{position:fixed;inset:0;z-index:9999;background:#090910;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s ease;}
@@ -736,26 +773,32 @@ function buildRoot(){
   const wrap=el('div',{css:'height:100%;display:flex;flex-direction:column;'});
   if(S.notif)wrap.appendChild(el('div',{cls:'notif-bar'},[S.notif.ico+' '+S.notif.msg]));
 
-  // Кнопка переключения темы — фиксированная, поверх всего
-  if(!document.getElementById('theme-toggle-btn')){
-    const tb=document.createElement('button');
-    tb.id='theme-toggle-btn';tb.className='theme-toggle';
-    tb.setAttribute('aria-label','Сменить тему');
-    const thumb=document.createElement('div');
-    thumb.className='theme-toggle-thumb';
-    thumb.textContent=S.lightTheme?'☀️':'🌙';
-    tb.appendChild(thumb);
-    tb.addEventListener('click',()=>{
-      S.lightTheme=!S.lightTheme;
-      document.documentElement.classList.toggle('light',S.lightTheme);
+  // Удаляем переключатель если мы не на главном экране
+  const isMainScreen=!S.onboard&&!S.checkout&&!S.adminMode&&!S.adminLogin&&!S.sellerMode&&!S.chatOpen&&!S.detail&&!S.profSec;
+  const existingToggle=document.getElementById('theme-toggle-btn');
+  if(!isMainScreen){
+    if(existingToggle)existingToggle.style.display='none';
+  } else {
+    if(!existingToggle){
+      const tb=document.createElement('button');
+      tb.id='theme-toggle-btn';tb.className='theme-toggle';
+      tb.setAttribute('aria-label','Сменить тему');
+      const thumb=document.createElement('div');
+      thumb.className='theme-toggle-thumb';
       thumb.textContent=S.lightTheme?'☀️':'🌙';
-      try{localStorage.setItem('vn_theme',S.lightTheme?'light':'dark');}catch(e){}
-    });
-    document.body.appendChild(tb);
-  }else{
-    // Обновляем иконку при render без пересоздания
-    const thumb=document.querySelector('#theme-toggle-btn .theme-toggle-thumb');
-    if(thumb)thumb.textContent=S.lightTheme?'☀️':'🌙';
+      tb.appendChild(thumb);
+      tb.addEventListener('click',()=>{
+        S.lightTheme=!S.lightTheme;
+        document.documentElement.classList.toggle('light',S.lightTheme);
+        thumb.textContent=S.lightTheme?'☀️':'🌙';
+        try{localStorage.setItem('vn_theme',S.lightTheme?'light':'dark');}catch(e){}
+      });
+      document.body.appendChild(tb);
+    } else {
+      existingToggle.style.display='';
+      const thumb=existingToggle.querySelector('.theme-toggle-thumb');
+      if(thumb)thumb.textContent=S.lightTheme?'☀️':'🌙';
+    }
   }
   if(S.onboard){wrap.appendChild(buildOnboard());return wrap;}
   if(S.checkout){wrap.appendChild(buildCheckout());return wrap;}
@@ -1513,7 +1556,7 @@ function buildCO0(page){
     slots.forEach(slot=>{
       const sel=co.timeSlot===slot.id;
       const btn=document.createElement('div');
-      btn.style.cssText='flex-shrink:0;scroll-snap-align:start;padding:14px 18px;border-radius:16px;border:1.5px solid '+(sel?'var(--accent)':'rgba(255,255,255,.12)')+';background:'+(sel?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)')+';cursor:pointer;transition:all .2s;text-align:center;min-width:130px;';
+      btn.style.cssText='flex-shrink:0;scroll-snap-align:start;padding:14px 18px;border-radius:16px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(191,90,242,.12)':'var(--bg2)')+';cursor:pointer;transition:all .2s;text-align:center;min-width:130px;';
       btn.dataset.slotId=slot.id;
 
       const lbl=document.createElement('div');
@@ -1535,8 +1578,8 @@ function buildCO0(page){
         // Обновляем стили без ре-рендера
         carousel.querySelectorAll('[data-slot-id]').forEach(b=>{
           const active=b.dataset.slotId===slot.id;
-          b.style.borderColor=active?'var(--accent)':'rgba(255,255,255,.12)';
-          b.style.background=active?'rgba(191,90,242,.12)':'rgba(255,255,255,.05)';
+          b.style.borderColor=active?'var(--accent)':'var(--border2)';
+          b.style.background=active?'rgba(191,90,242,.12)':'var(--bg2)';
           b.querySelector('div').style.color=active?'var(--accent)':'var(--txt)';
         });
         continueBtn.disabled=false;
@@ -4874,11 +4917,15 @@ function buildSellerLogin(page){
       const d=await r.json();
       if(d.ok&&d.seller){
         S.sellerUser=d.seller;S.sellerTab=0;
-        S.sellerOrders=[]; S._sellerOrdersLoaded=true; // сбрасываем чтобы загрузились свежие
+        S.sellerOrders=[]; S._sellerOrdersLoaded=true;
         loadSellerOrders().then(()=>render());
         render();
       }else if(d.error==='not_approved'){
-        err.textContent='Заявка ещё не одобрена администратором';
+        // Больше не должно случаться — но на всякий случай
+        err.textContent='Ожидайте одобрения. Если вы уже получили логин/пароль — попробуйте ещё раз через минуту.';
+        loginB.disabled=false;loginB.textContent='Войти';
+      }else if(d.error==='no_kv'){
+        err.textContent='Данные не найдены. Подайте заявку заново — это быстро.';
         loginB.disabled=false;loginB.textContent='Войти';
       }else if(d.error==='blocked'){
         err.textContent='Магазин заблокирован. Обратитесь в поддержку';

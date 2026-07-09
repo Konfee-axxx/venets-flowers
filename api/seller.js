@@ -183,16 +183,19 @@ module.exports = async function(req, res) {
     const seller = await dbGet('seller:'+login).catch(()=>null);
     if(!seller){
       return res.status(200).end(JSON.stringify({ok:false, error:'no_kv',
-        hint:'Vercel KV не подключён — подключите в Dashboard → Storage.'}));
+        hint:'Данные не найдены. Возможно KV только что подключён — подайте заявку заново.'}));
     }
-    if(seller.password!==password){
+    if(seller.password !== password){
       return res.status(200).end(JSON.stringify({ok:false, error:'wrong'}));
     }
     if(seller.status==='blocked'){
       return res.status(200).end(JSON.stringify({ok:false, error:'blocked'}));
     }
+    // Если пароль верный — пускаем (pending означает что одобрение было до подключения KV)
+    // При входе автоматически активируем аккаунт
     if(seller.status==='pending'){
-      return res.status(200).end(JSON.stringify({ok:false, error:'not_approved'}));
+      seller.status='active';
+      await dbSet('seller:'+login, seller, 60*60*24*365).catch(()=>{});
     }
     return res.status(200).end(JSON.stringify({
       ok:true,

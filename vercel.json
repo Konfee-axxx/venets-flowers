@@ -10,6 +10,7 @@
     { "src": "/api/referral",    "dest": "/api/referral.js" },
     { "src": "/api/seller",      "dest": "/api/seller.js" },
     { "src": "/api/images",      "dest": "/api/images.js" },
+    { "src": "/api/seller-products", "dest": "/api/seller-products.js" },
     { "src": "/api/export",      "dest": "/api/export.js" },
     { "src": "/api/status",      "dest": "/api/status.js" },
     { "src": "/api/setup",       "dest": "/api/setup.js" },

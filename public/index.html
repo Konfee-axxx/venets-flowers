@@ -1100,10 +1100,7 @@ function refreshGrid(){ populateGrid(S.tab===0?'f':'g'); }
 function buildFlowers(){
   const wrap=el('div',{css:'display:flex;flex-direction:column;height:100%;overflow:hidden;'});
   const hdr=el('div',{cls:'hdr'});
-  const brand=el('div',{css:'display:flex;align-items:center;gap:10px;flex:1;'});
-  brand.appendChild(el('img',{src:LOGO_URI,alt:'Venets',css:'width:112px;height:auto;display:block;'}));
-  brand.appendChild(el('div',{cls:'hdr-title',css:'flex:none;'},['Venets']));
-  hdr.appendChild(brand);
+  hdr.appendChild(el('div',{cls:'hdr-title'},['Venets']));
   if(!S.user){
     const pill=el('div',{css:'background:rgba(238,158,35,.15);border:1px solid rgba(238,158,35,.35);border-radius:100px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--accent);cursor:pointer;white-space:nowrap;',
       onClick:()=>{S.onboard=true;S.obStep=0;render();}},['Зарегистрироваться']);
@@ -1128,10 +1125,7 @@ function buildFlowers(){
 function buildGifts(){
   const wrap=el('div',{css:'display:flex;flex-direction:column;height:100%;overflow:hidden;'});
   const hdr=el('div',{cls:'hdr'});
-  const brand=el('div',{css:'display:flex;align-items:center;gap:10px;flex:1;'});
-  brand.appendChild(el('img',{src:LOGO_URI,alt:'Venets',css:'width:112px;height:auto;display:block;'}));
-  brand.appendChild(el('div',{cls:'hdr-title',css:'flex:none;'},['Подарки']));
-  hdr.appendChild(brand);
+  hdr.appendChild(el('div',{cls:'hdr-title'},['Подарки']));
   if(!S.user){
     const pill=el('div',{css:'background:rgba(238,158,35,.15);border:1px solid rgba(238,158,35,.35);border-radius:100px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--accent);cursor:pointer;white-space:nowrap;',
       onClick:()=>{S.onboard=true;S.obStep=0;render();}},['Зарегистрироваться']);

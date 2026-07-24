@@ -6,7 +6,7 @@ module.exports = async function(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   const diag = await dbDiag();
-  const storageOk = diag.kv || diag.blob;
+  const storageOk = diag.kv_working || diag.blob_working;
 
   if (!TOKEN) return res.status(200).end(JSON.stringify({
     ok: false, error: 'нет BOT_TOKEN', storage: diag,
@@ -21,7 +21,11 @@ module.exports = async function(req, res) {
   const hasCallbackQuery = allowedUpdates.length === 0 || allowedUpdates.includes('callback_query');
 
   const problems = [];
-  if (!storageOk) problems.push('⚠️ Нет постоянного хранилища — данные теряются при перезапуске! Подключите Vercel KV или Blob в Dashboard → Storage');
+  if (!storageOk && !diag.kv_configured && !diag.blob_configured) {
+    problems.push('⚠️ Нет постоянного хранилища — данные теряются при перезапуске! Подключите Vercel KV или Blob в Dashboard → Storage');
+  } else if (!storageOk) {
+    problems.push('⚠️ Хранилище подключено (переменные окружения заданы), но тестовая запись/чтение не проходит. Проверьте логи функции в Vercel Dashboard → Deployments → Functions, и что после подключения Storage был сделан Redeploy.');
+  }
   if (!hasCallbackQuery) problems.push('⚠️ callback_query не включён — кнопки в боте не работают. Откройте /api/setup');
 
   return res.status(200).end(JSON.stringify({

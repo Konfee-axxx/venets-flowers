@@ -24,59 +24,61 @@ if (!global._kvFallback) global._kvFallback = {};
 const MEM = global._kvFallback;
 
 // ── Уровень 1: Vercel KV ─────────────────────────────────────────────────────
-async function kvGet(key) {
+// Используем pipeline-эндпоинт Upstash — команда передаётся как JSON-массив
+// ["SET", key, value, "EX", ttl]. Это официально задокументированный формат,
+// который однозначно работает и с TTL, и с произвольным (в т.ч. очень длинным
+// JSON) значением — в отличие от варианта с TTL через query-параметр на /set,
+// который нигде явно не задокументирован и на практике мог просто игнорироваться.
+async function kvPipeline(commands) {
   if (!KV_URL || !KV_TOKEN) return null;
   try {
-    const r = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${KV_TOKEN}` }
+    const r = await fetch(`${KV_URL}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(commands)
     });
     if (!r.ok) {
-      console.error('[db] kvGet HTTP error:', r.status, key);
+      const txt = await r.text().catch(() => '');
+      console.error('[db] kvPipeline HTTP error:', r.status, txt.slice(0, 300));
       return null;
     }
     const d = await r.json();
-    if (d.error) { console.error('[db] kvGet error:', d.error, key); return null; }
-    return (d.result !== null && d.result !== undefined) ? d.result : null;
-  } catch(e) { console.error('[db] kvGet exception:', e.message); return null; }
+    if (!Array.isArray(d)) {
+      console.error('[db] kvPipeline unexpected response shape:', JSON.stringify(d).slice(0, 300));
+      return null;
+    }
+    return d; // массив { result } | { error } — по одному на каждую команду
+  } catch(e) { console.error('[db] kvPipeline exception:', e.message); return null; }
+}
+
+async function kvGet(key) {
+  const res = await kvPipeline([['GET', key]]);
+  if (!res || !res[0]) return null;
+  if (res[0].error) { console.error('[db] kvGet error:', res[0].error, key); return null; }
+  const result = res[0].result;
+  return (result !== null && result !== undefined) ? result : null;
 }
 
 async function kvSet(key, value, ttlSeconds) {
   if (!KV_URL || !KV_TOKEN) return false;
   const strVal = typeof value === 'string' ? value : JSON.stringify(value);
-  try {
-    // ВАЖНО: REST API Vercel KV / Upstash ожидает значение как СЫРОЕ тело запроса,
-    // а не обёрнутым в JSON-объект { value: ... } — иначе в базу пишется мусор.
-    const url = ttlSeconds
-      ? `${KV_URL}/set/${encodeURIComponent(key)}?EX=${ttlSeconds}`
-      : `${KV_URL}/set/${encodeURIComponent(key)}`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'text/plain' },
-      body: strVal
-    });
-    if (!r.ok) {
-      console.error('[db] kvSet HTTP error:', r.status, key);
-      return false;
-    }
-    const d = await r.json().catch(() => null);
-    if (!d || d.error || d.result !== 'OK') {
-      console.error('[db] kvSet unexpected response:', JSON.stringify(d), key);
-      return false;
-    }
-    MEM[key] = strVal;
-    return true;
-  } catch(e) { console.error('[db] kvSet exception:', e.message); return false; }
+  const cmd = ttlSeconds
+    ? ['SET', key, strVal, 'EX', String(ttlSeconds)]
+    : ['SET', key, strVal];
+  const res = await kvPipeline([cmd]);
+  if (!res || !res[0]) return false;
+  if (res[0].error) { console.error('[db] kvSet error:', res[0].error, key); return false; }
+  if (res[0].result !== 'OK') {
+    console.error('[db] kvSet unexpected result:', JSON.stringify(res[0].result), key);
+    return false;
+  }
+  MEM[key] = strVal;
+  return true;
 }
 
 async function kvDel(key) {
-  if (!KV_URL || !KV_TOKEN) return;
-  try {
-    const r = await fetch(`${KV_URL}/del/${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${KV_TOKEN}` }
-    });
-    if (!r.ok) console.error('[db] kvDel HTTP error:', r.status, key);
-  } catch(e) { console.error('[db] kvDel exception:', e.message); }
+  const res = await kvPipeline([['DEL', key]]);
+  if (!res || !res[0] || res[0].error) console.error('[db] kvDel failed:', key, res && res[0] && res[0].error);
 }
 
 // ── Уровень 2: Vercel Blob (постоянное хранилище файлов) ────────────────────

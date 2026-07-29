@@ -590,6 +590,7 @@ html.light .co-page .hdr{background:rgba(238,248,244,.97)!important;}
     content:'';position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:590;
   }
 }
+</style>
 
 </head>
 <body>
@@ -671,9 +672,21 @@ function isOwner(){
 
 // СОСТОЯНИЕ
 // ══════════════════════════════════════════
+// Десктоп-раскладку включаем ТОЛЬКО если сайт открыт напрямую в обычном браузере.
+// Внутри Telegram (Mini App / WebView) — никогда, даже если window.innerWidth
+// формально ≥1024: это встроенный WebView, а не полноценный широкий браузер,
+// и его репортинг ширины окна ненадёжен, особенно в момент первой отрисовки.
+function computeIsDesktop(){
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.Telegram && window.Telegram.WebApp) return false;
+  } catch(e) {}
+  return window.innerWidth >= 1024;
+}
+
 let S = {
   tab:0, user:null, cart:{}, orders:[],
-  isDesktop: (typeof window!=='undefined' && window.innerWidth>=1024),
+  isDesktop: computeIsDesktop(),
   dskCatSec:'f', dskSort:'popular',
   onboard:false, obStep:0,
   obPhone:'',obAddr:'',obFloor:'',obApt:'',obEntr:'',obIntercom:'',obNote:'',obName:'',
@@ -5762,7 +5775,7 @@ function buildSellerOrders(body){
   window.addEventListener('resize', ()=>{
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(()=>{
-      const nowDesktop = window.innerWidth >= 1024;
+      const nowDesktop = computeIsDesktop();
       S.isDesktop = nowDesktop;
       if(nowDesktop !== lastIsDesktop){ lastIsDesktop = nowDesktop; render(); }
     }, 150);

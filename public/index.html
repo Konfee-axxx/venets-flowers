@@ -554,6 +554,12 @@ html.light .co-page .hdr{background:rgba(238,248,244,.97)!important;}
 .dsk-cart-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.4);display:flex;justify-content:flex-end;}
 .dsk-cart-panel{width:420px;max-width:100%;height:100%;background:var(--bg2);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.3);animation:dskSlideIn .3s cubic-bezier(.32,.72,0,1);}
 @keyframes dskSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+/* — Профиль (боковая панель) — */
+.dsk-profile-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.4);display:flex;justify-content:flex-end;}
+.dsk-profile-panel{width:460px;max-width:100%;height:100%;background:var(--bg2);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.3);animation:dskSlideIn .3s cubic-bezier(.32,.72,0,1);overflow:hidden;transform:translateZ(0);}
+.dsk-profile-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.dsk-profile-body{flex:1;overflow-y:auto;min-height:0;}
 .dsk-cart-head{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 .dsk-cart-items{flex:1;overflow-y:auto;padding:8px 24px;}
 .dsk-cart-row{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:0.5px solid var(--border);cursor:pointer;}
@@ -1013,14 +1019,11 @@ function buildDesktopRoot(){
   if(S.onboard){ wrap.appendChild(wrapMobileFrame(buildOnboard(),false)); return wrap; }
   if(S.chatOpen){ wrap.appendChild(wrapMobileFrame(buildChatScreen())); return wrap; }
   if(S.detail){ wrap.appendChild(wrapMobileFrame(buildDetail())); return wrap; }
-  if(S.profSec){ wrap.appendChild(wrapMobileFrame(buildProfSec())); return wrap; }
   if(S.checkout){ wrap.appendChild(buildDesktopCheckout()); return wrap; }
 
   if(S.tab===2){
-    const scr=el('div',{cls:'screen',css:'position:relative;height:100%;'});
-    scr.appendChild(buildProfile());
-    scr.appendChild(buildNav());
-    wrap.appendChild(wrapMobileFrame(scr));
+    wrap.appendChild(buildDesktopCatalogBody());
+    wrap.appendChild(buildDesktopProfilePanel());
     return wrap;
   }
 
@@ -1318,6 +1321,34 @@ function buildDesktopCartPanel(){
     ob.textContent='\u041e\u0444\u043e\u0440\u043c\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437';
     foot.appendChild(ob);
     panel.appendChild(foot);
+  }
+
+  overlay.appendChild(panel);
+  return overlay;
+}
+
+function closeDesktopProfilePanel(){
+  S.tab = S.dskCatSec==='g' ? 1 : 0;
+  S.profSec = null;
+  render();
+}
+
+function buildDesktopProfilePanel(){
+  const overlay=el('div',{cls:'dsk-profile-overlay',onClick:(e)=>{if(e.target===overlay)closeDesktopProfilePanel();}});
+  const panel=el('div',{cls:'dsk-profile-panel'});
+
+  if(S.profSec){
+    // buildProfSec() уже содержит собственный хедер с кнопкой "\u2039 \u041d\u0430\u0437\u0430\u0434" — используем как есть,
+    // .dsk-profile-panel имеет transform, поэтому его position:fixed корректно ограничивается панелью
+    panel.appendChild(buildProfSec());
+  }else{
+    const head=el('div',{cls:'dsk-profile-head'});
+    head.appendChild(el('div',{css:'font-size:19px;font-weight:800;flex:1;'},['\u041f\u0440\u043e\u0444\u0438\u043b\u044c']));
+    head.appendChild(el('button',{css:'background:none;border:none;font-size:20px;color:var(--txt2);cursor:pointer;',onClick:closeDesktopProfilePanel},['\u2715']));
+    panel.appendChild(head);
+    const body=el('div',{cls:'dsk-profile-body'});
+    body.appendChild(buildProfile());
+    panel.appendChild(body);
   }
 
   overlay.appendChild(panel);

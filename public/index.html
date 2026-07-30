@@ -1083,6 +1083,18 @@ function buildDesktopHeader(){
   return hdr;
 }
 
+function buildDesktopHeroTile(slide, big){
+  const tile=el('div',{cls:'dsk-hero-tile',
+    onClick:()=>{S.tab=0;S.dskCatSec='f';S.searchQuery=slide.title||'';render();}});
+  if(slide.imgUrl){
+    const im=document.createElement('img');im.src=slide.imgUrl;im.alt='';tile.appendChild(im);
+  }else{
+    tile.style.background=slide.bg||'linear-gradient(145deg,#2f3a2c,#1a2118)';
+  }
+  if(slide.title)tile.appendChild(el('div',{cls:'dsk-hero-tile-label'},[slide.title]));
+  return tile;
+}
+
 function buildDesktopHero(){
   const hero=el('div',{cls:'dsk-hero'});
   const main=el('div',{cls:'dsk-hero-main'});
@@ -1096,18 +1108,17 @@ function buildDesktopHero(){
   main.appendChild(dots);
   hero.appendChild(main);
 
+  // ── Правые плитки — тот же CAROUSEL_SLIDES, что редактирует админ и что крутится
+  // на мобильной карусели. Единый источник данных, а не отдельный захардкоженный набор.
   const side=el('div',{cls:'dsk-hero-side'});
-  const topTile=el('div',{cls:'dsk-hero-tile',css:'background:linear-gradient(145deg,#2f3a2c,#1a2118);',
-    onClick:()=>{S.tab=0;S.dskCatSec='f';S.dskOccasion='\u0414\u043b\u044f \u043c\u0430\u043c\u044b';render();}});
-  topTile.appendChild(el('div',{cls:'dsk-hero-tile-label'},['\u0414\u043b\u044f \u043c\u0430\u043c\u044b']));
-  side.appendChild(topTile);
+  const slides=CAROUSEL_SLIDES&&CAROUSEL_SLIDES.length?CAROUSEL_SLIDES:[];
+  if(slides[0]){
+    side.appendChild(buildDesktopHeroTile(slides[0],true));
+  }
   const lowerRow=el('div',{cls:'dsk-hero-tile-lower'});
-  const tile2=el('div',{cls:'dsk-hero-tile',css:'background:linear-gradient(145deg,#3a5040,#1f2c1c);',onClick:()=>{S.tab=0;S.dskCatSec='f';render();}});
-  tile2.appendChild(el('div',{cls:'dsk-hero-tile-label'},['\u0414\u043b\u044f \u0441\u0430\u0434\u0430']));
-  const tile3=el('div',{cls:'dsk-hero-tile',css:'background:linear-gradient(145deg,#4a3020,#2a180d);',onClick:()=>{S.tab=0;S.dskCatSec='f';S.dskOccasion='\u0422\u043e\u0439 \u0441\u0430\u043c\u043e\u0439';render();}});
-  tile3.appendChild(el('div',{cls:'dsk-hero-tile-label'},['\u0414\u043b\u044f \u0434\u0435\u0432\u0443\u0448\u043a\u0438']));
-  lowerRow.appendChild(tile2);lowerRow.appendChild(tile3);
-  side.appendChild(lowerRow);
+  if(slides[1])lowerRow.appendChild(buildDesktopHeroTile(slides[1]));
+  if(slides[2])lowerRow.appendChild(buildDesktopHeroTile(slides[2]));
+  if(slides[1]||slides[2])side.appendChild(lowerRow);
   hero.appendChild(side);
   return hero;
 }

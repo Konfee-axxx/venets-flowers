@@ -584,7 +584,7 @@ html.light .co-page .hdr{background:rgba(238,248,244,.97)!important;}
 /* Админка и кабинет продавца остаются "мобильными" по дизайну, но на широком
    экране получают приятное центрированное обрамление вместо растянутости во всю ширину */
 @media (min-width:1024px){
-  .admin-page, .seller-app-page{
+  .admin-login-page, .seller-app-page{
     left:50%;top:40px;bottom:40px;right:auto;
     transform:translateX(-50%);
     width:460px;max-width:calc(100vw - 40px);
@@ -592,9 +592,86 @@ html.light .co-page .hdr{background:rgba(238,248,244,.97)!important;}
     box-shadow:0 30px 90px rgba(0,0,0,.5);
     border:1px solid var(--border);
   }
-  body:has(.admin-page)::before, body:has(.seller-app-page)::before{
+  body:has(.admin-login-page)::before, body:has(.seller-app-page)::before{
     content:'';position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:590;
   }
+}
+/* ══════════════════════════════════════════════════════════════
+   ДЕСКТОП АДМИНКА — полноценная раскладка (сайдбар + широкий контент)
+   ══════════════════════════════════════════════════════════════ */
+.dadm-root{position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;overflow:hidden;}
+.dadm-sidebar{width:240px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 0;}
+.dadm-sidebar-brand{display:flex;align-items:center;gap:10px;padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.dadm-sidebar-brand img{width:28px;height:auto;}
+.dadm-nav-item{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer;font-size:14px;font-weight:600;color:var(--txt2);position:relative;transition:all .15s;}
+.dadm-nav-item:hover{background:var(--bg3);color:var(--txt);}
+.dadm-nav-item.active{background:rgba(238,158,35,.12);color:var(--accent);}
+.dadm-nav-item.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);}
+.dadm-nav-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0;}
+.dadm-nav-badge{margin-left:auto;background:var(--pink);color:#fff;border-radius:100px;min-width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;}
+.dadm-sidebar-foot{margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--border);}
+.dadm-exit-btn{width:100%;padding:10px;border-radius:12px;border:1px solid var(--border2);background:none;color:var(--txt2);font-size:13px;font-weight:600;cursor:pointer;}
+.dadm-exit-btn:hover{color:var(--pink);border-color:var(--pink);}
+
+.dadm-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+.dadm-topbar{padding:18px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.dadm-topbar-title{font-size:20px;font-weight:800;flex-shrink:0;}
+.dadm-topbar-search{flex:1;max-width:340px;display:flex;align-items:center;gap:8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:12px;padding:9px 14px;}
+.dadm-topbar-search input{flex:1;border:none;background:none;outline:none;font-size:13px;color:var(--txt);font-family:inherit;}
+.dadm-topbar-search input::placeholder{color:var(--txt3);}
+.dadm-content{flex:1;overflow-y:auto;padding:24px 32px 60px;}
+
+.dadm-warn-banner{background:#ff3b30;color:#fff;font-size:12px;font-weight:700;padding:9px 16px;text-align:center;flex-shrink:0;}
+
+.dadm-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
+.dadm-kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:20px;}
+.dadm-kpi-label{font-size:12px;color:var(--txt2);font-weight:600;margin-bottom:8px;}
+.dadm-kpi-value{font-size:26px;font-weight:800;}
+.dadm-kpi-sub{font-size:11px;color:var(--txt3);margin-top:4px;}
+.dadm-chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:22px;margin-bottom:24px;}
+
+.dadm-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.dadm-bulk-bar{display:flex;align-items:center;gap:10px;background:rgba(238,158,35,.1);border:1px solid rgba(238,158,35,.3);border-radius:12px;padding:10px 16px;margin-bottom:14px;}
+.dadm-bulk-count{font-size:13px;font-weight:700;color:var(--accent);}
+.dadm-bulk-actions{display:flex;gap:8px;margin-left:auto;}
+.dadm-btn-sm{padding:7px 14px;border-radius:9px;border:1px solid var(--border2);background:var(--bg2);color:var(--txt);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.dadm-btn-sm:hover{background:var(--bg3);}
+.dadm-btn-sm.danger{border-color:rgba(255,55,95,.4);color:var(--pink);}
+.dadm-select{border:1px solid var(--border2);background:var(--bg2);color:var(--txt);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+
+.dadm-table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:18px;overflow:hidden;}
+.dadm-table{width:100%;border-collapse:collapse;font-size:13px;}
+.dadm-table th{text-align:left;padding:12px 14px;font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;}
+.dadm-table th:hover{color:var(--txt);}
+.dadm-table th.dadm-sort-active{color:var(--accent);}
+.dadm-table td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.dadm-table tbody tr{cursor:pointer;transition:background .1s;}
+.dadm-table tbody tr:hover{background:var(--bg3);}
+.dadm-table tbody tr:last-child td{border-bottom:none;}
+.dadm-table-checkbox{width:36px;}
+.dadm-row-check{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;cursor:pointer;}
+.dadm-row-check.on{background:var(--accent);border-color:var(--accent);}
+.dadm-status-pill{display:inline-block;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:700;white-space:nowrap;}
+.dadm-empty{text-align:center;padding:60px 20px;color:var(--txt3);}
+.dadm-thumb{width:38px;height:38px;border-radius:10px;object-fit:cover;background:var(--bg3);flex-shrink:0;}
+
+.dadm-detail-overlay{position:fixed;inset:0;z-index:650;background:rgba(0,0,0,.4);display:flex;justify-content:flex-end;}
+.dadm-detail-panel{width:440px;max-width:100%;height:100%;background:var(--bg2);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.3);animation:dskSlideIn .25s cubic-bezier(.32,.72,0,1);}
+.dadm-detail-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.dadm-detail-body{flex:1;overflow-y:auto;padding:20px 24px 40px;}
+
+.dadm-chat-layout{display:grid;grid-template-columns:320px 1fr;gap:0;background:var(--bg2);border:1px solid var(--border);border-radius:18px;overflow:hidden;height:calc(100vh - 220px);min-height:400px;}
+.dadm-chat-list{border-right:1px solid var(--border);overflow-y:auto;}
+.dadm-chat-list-item{padding:14px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;}
+.dadm-chat-list-item:hover{background:var(--bg3);}
+.dadm-chat-list-item.active{background:rgba(238,158,35,.1);}
+.dadm-chat-detail{display:flex;flex-direction:column;overflow:hidden;}
+.dadm-chat-msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px;}
+.dadm-chat-input-row{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;}
+
+@media (max-width:900px){
+  .dadm-kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .dadm-chat-layout{grid-template-columns:260px 1fr;}
 }
 </style>
 
@@ -886,6 +963,9 @@ function render(){
   app.appendChild(buildRoot());
 }
 function buildRoot(){
+  if(S.isDesktop && S.adminMode){
+    return buildDesktopAdminRoot();
+  }
   if(S.isDesktop && !S.adminMode && !S.adminLogin && !S.sellerMode){
     return buildDesktopRoot();
   }
@@ -1372,6 +1452,896 @@ function buildDesktopCheckout(){
   shell.appendChild(buildCheckout());
   overlay.appendChild(shell);
   return overlay;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ДЕСКТОП АДМИНКА — сайдбар + широкий контент + таблицы
+// ══════════════════════════════════════════════════════════════
+
+const DADM_TABS = [
+  {key:'dashboard', icon:'📊', label:'Дашборд'},
+  {key:'orders', icon:'📦', label:'Заказы'},
+  {key:'users', icon:'👤', label:'Клиенты'},
+  {key:'catalog', icon:'🌸', label:'Каталог'},
+  {key:'logs', icon:'📋', label:'Логи'},
+  {key:'chats', icon:'💬', label:'Поддержка'},
+  {key:'sellers', icon:'🏪', label:'Продавцы'},
+];
+
+function getDskTableState(key){
+  if(!S._dskAdmTables) S._dskAdmTables={};
+  if(!S._dskAdmTables[key]) S._dskAdmTables[key]={search:'',sortKey:null,sortDir:'asc',selected:[]};
+  return S._dskAdmTables[key];
+}
+
+function buildDskTable(key, opts){
+  const st = getDskTableState(key);
+  const wrap = el('div',{});
+
+  const toolbar = el('div',{cls:'dadm-toolbar'});
+  const searchBox = el('div',{cls:'dadm-topbar-search',css:'max-width:280px;flex:none;'});
+  searchBox.appendChild(el('span',{css:'color:var(--txt3);font-size:13px;'},['🔍']));
+  const searchInp = document.createElement('input');
+  searchInp.placeholder = opts.searchPlaceholder || 'Поиск...';
+  searchInp.value = st.search;
+  searchInp.oninput = ()=>{ st.search=searchInp.value; renderTable(); };
+  searchBox.appendChild(searchInp);
+  toolbar.appendChild(searchBox);
+  if(opts.extraToolbar) opts.extraToolbar.forEach(n=>toolbar.appendChild(n));
+  wrap.appendChild(toolbar);
+
+  const bulkBarSlot = el('div',{});
+  wrap.appendChild(bulkBarSlot);
+
+  const tableWrap = el('div',{cls:'dadm-table-wrap'});
+  wrap.appendChild(tableWrap);
+
+  function getFilteredSorted(){
+    let rows = opts.rows.slice();
+    const q = st.search.trim().toLowerCase();
+    if(q) rows = rows.filter(r=>opts.searchFn(r,q));
+    if(st.sortKey){
+      const col = opts.columns.find(c=>c.key===st.sortKey);
+      if(col && col.sortVal){
+        rows.sort((a,b)=>{
+          const av=col.sortVal(a), bv=col.sortVal(b);
+          if(av<bv) return st.sortDir==='asc'?-1:1;
+          if(av>bv) return st.sortDir==='asc'?1:-1;
+          return 0;
+        });
+      }
+    }
+    return rows;
+  }
+
+  function renderBulkBar(rows){
+    bulkBarSlot.innerHTML='';
+    if(!st.selected.length || !opts.bulkActions) return;
+    const bar = el('div',{cls:'dadm-bulk-bar'});
+    bar.appendChild(el('span',{cls:'dadm-bulk-count'},[st.selected.length+' выбрано']));
+    const actionsWrap = el('div',{cls:'dadm-bulk-actions'});
+    opts.bulkActions.forEach(a=>{
+      const btn = el('button',{cls:'dadm-btn-sm'+(a.danger?' danger':'')},[a.label]);
+      btn.onclick=()=>{
+        const selRows = opts.rows.filter(r=>st.selected.includes(String(opts.getId(r))));
+        a.onClick(selRows);
+      };
+      actionsWrap.appendChild(btn);
+    });
+    bar.appendChild(actionsWrap);
+    const clearBtn = el('button',{cls:'dadm-btn-sm',onClick:()=>{st.selected=[];renderTable();}},['Снять выбор']);
+    bar.appendChild(clearBtn);
+    bulkBarSlot.appendChild(bar);
+  }
+
+  function renderTable(){
+    const rows = getFilteredSorted();
+    renderBulkBar(rows);
+    tableWrap.innerHTML='';
+    if(!rows.length){
+      tableWrap.appendChild(el('div',{cls:'dadm-empty'},[opts.emptyText||'Ничего не найдено']));
+      return;
+    }
+    const table = document.createElement('table');
+    table.className='dadm-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    if(opts.bulkActions){
+      const th = document.createElement('th');
+      th.className='dadm-table-checkbox';
+      const allSelected = rows.length>0 && rows.every(r=>st.selected.includes(String(opts.getId(r))));
+      const chk = el('div',{cls:'dadm-row-check'+(allSelected?' on':''),onClick:()=>{
+        if(allSelected) st.selected = st.selected.filter(id=>!rows.some(r=>String(opts.getId(r))===id));
+        else { const ids=rows.map(r=>String(opts.getId(r))); st.selected=[...new Set([...st.selected,...ids])]; }
+        renderTable();
+      }},[allSelected?'✓':'']);
+      th.appendChild(chk);
+      headRow.appendChild(th);
+    }
+    opts.columns.forEach(col=>{
+      const th = document.createElement('th');
+      let label=col.label;
+      if(col.sortable && st.sortKey===col.key) label += (st.sortDir==='asc'?' ↑':' ↓');
+      th.textContent=label;
+      if(st.sortKey===col.key) th.classList.add('dadm-sort-active');
+      if(col.width) th.style.width=col.width;
+      if(col.sortable){
+        th.onclick=()=>{
+          if(st.sortKey===col.key) st.sortDir = st.sortDir==='asc'?'desc':'asc';
+          else { st.sortKey=col.key; st.sortDir='asc'; }
+          renderTable();
+        };
+      }
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody=document.createElement('tbody');
+    rows.forEach(row=>{
+      const tr=document.createElement('tr');
+      const id=String(opts.getId(row));
+      if(opts.bulkActions){
+        const td=document.createElement('td');
+        const sel=st.selected.includes(id);
+        const chk=el('div',{cls:'dadm-row-check'+(sel?' on':''),onClick:(e)=>{
+          e.stopPropagation();
+          if(sel) st.selected=st.selected.filter(x=>x!==id);
+          else st.selected.push(id);
+          renderTable();
+        }},[sel?'✓':'']);
+        td.appendChild(chk);
+        tr.appendChild(td);
+      }
+      opts.columns.forEach(col=>{
+        const td=document.createElement('td');
+        const rendered=col.render(row);
+        if(rendered instanceof Node) td.appendChild(rendered);
+        else td.textContent=rendered;
+        tr.appendChild(td);
+      });
+      if(opts.onRowClick) tr.onclick=()=>opts.onRowClick(row);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+  }
+
+  renderTable();
+  return wrap;
+}
+
+function buildDesktopAdminRoot(){
+  if(!S._adminSyncTimer){
+    S._adminSyncTimer=setInterval(syncAdminData,5000);
+    syncAdminData();
+  }
+  if(!S._storageChecked){
+    S._storageChecked=true;
+    fetch('/api/status').then(r=>r.json()).then(sd=>{
+      if(sd.storage&&!sd.storage_ok){
+        const warn=document.getElementById('dadm-storage-warn');
+        if(warn)warn.style.display='block';
+      }
+    }).catch(()=>{});
+  }
+
+  const root=el('div',{cls:'dadm-root'});
+  const sidebar=el('div',{cls:'dadm-sidebar'});
+  const brand=el('div',{cls:'dadm-sidebar-brand'});
+  brand.appendChild(el('img',{src:LOGO_URI,alt:'Venets'}));
+  brand.appendChild(el('div',{css:'font-size:15px;font-weight:800;'},['Админ-панель']));
+  sidebar.appendChild(brand);
+
+  const _allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+  const pendingCount=_allOrd.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid').length;
+  const pendingChats=S.chats.filter(c=>c.status==='Активный'&&c.msgs.some(m=>m.from==='user'&&m.adminUnread)).length;
+
+  if(S._dadmTab===undefined) S._dadmTab='dashboard';
+
+  DADM_TABS.forEach(t=>{
+    const badge = t.key==='orders'?pendingCount : (t.key==='chats'?pendingChats:0);
+    const item=el('div',{cls:'dadm-nav-item'+(S._dadmTab===t.key?' active':''),onClick:()=>{S._dadmTab=t.key;S.adminDetail=null;render();}});
+    item.appendChild(el('span',{cls:'dadm-nav-icon'},[t.icon]));
+    item.appendChild(el('span',{},[t.label]));
+    if(badge>0) item.appendChild(el('span',{cls:'dadm-nav-badge'},[String(badge)]));
+    sidebar.appendChild(item);
+  });
+
+  const foot=el('div',{cls:'dadm-sidebar-foot'});
+  const exitBtn=el('button',{cls:'dadm-exit-btn',onClick:()=>{
+    if(S._adminSyncTimer){clearInterval(S._adminSyncTimer);S._adminSyncTimer=null;}
+    S.adminMode=false;S.adminDetail=null;render();
+  }},['← Выйти из админки']);
+  foot.appendChild(exitBtn);
+  sidebar.appendChild(foot);
+  root.appendChild(sidebar);
+
+  const main=el('div',{cls:'dadm-main'});
+  const warnBanner=el('div',{id:'dadm-storage-warn',cls:'dadm-warn-banner',css:'display:none;'},
+    ['⚠️ БД не подключена — данные хранятся в памяти и теряются при перезапуске! Vercel Dashboard → Storage → Create KV Store → Connect to project → Redeploy']);
+  main.appendChild(warnBanner);
+
+  const content=el('div',{cls:'dadm-content',id:'dadm-content'});
+  const builders={
+    dashboard: buildDskAdminDashboard,
+    orders: buildDskAdminOrders,
+    users: buildDskAdminUsers,
+    catalog: buildDskAdminCatalog,
+    logs: buildDskAdminLogs,
+    chats: buildDskAdminChats,
+    sellers: buildDskAdminSellers,
+  };
+  (builders[S._dadmTab]||buildDskAdminDashboard)(content);
+  main.appendChild(content);
+  root.appendChild(main);
+  return root;
+}
+
+function buildDskAdminDashboard(content){
+  const allOrders=S.adminOrders.length?S.adminOrders:S.orders;
+  const completedOrders=allOrders.filter(o=>!['Отменён','ОТМЕНЁН','cancelled'].includes(o.status)&&o.payState!=='cancelled');
+  const rev=completedOrders.reduce((a,o)=>a+o.total,0);
+
+  const kpiGrid=el('div',{cls:'dadm-kpi-grid'});
+  [
+    ['Выручка', rev.toLocaleString('ru')+' ₽', 'var(--green)'],
+    ['Заказов', completedOrders.length+'/'+allOrders.length, 'var(--blue)'],
+    ['Клиентов', String(S.adminUsers.length), 'var(--accent)'],
+    ['Товаров', String(FLOWERS.length+GIFTS.length), 'var(--gold)'],
+  ].forEach(([label,val,color])=>{
+    const card=el('div',{cls:'dadm-kpi-card'});
+    card.appendChild(el('div',{cls:'dadm-kpi-label'},[label]));
+    card.appendChild(el('div',{cls:'dadm-kpi-value',css:'color:'+color+';'},[val]));
+    kpiGrid.appendChild(card);
+  });
+  content.appendChild(kpiGrid);
+
+  const dayMap={};
+  allOrders.forEach(o=>{ if(o.date){ dayMap[o.date]=(dayMap[o.date]||0)+(o.total||0); } });
+  const last14=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=d.toLocaleDateString('ru');
+    last14.push({label:k.slice(0,5), value:dayMap[k]||0});
+  }
+  const chartCard=el('div',{cls:'dadm-chart-card'});
+  chartCard.appendChild(el('div',{css:'font-size:14px;font-weight:800;margin-bottom:14px;'},['Выручка за 14 дней']));
+  chartCard.appendChild(buildRevenueChart(last14));
+  content.appendChild(chartCard);
+
+  content.appendChild(el('div',{css:'font-size:16px;font-weight:800;margin-bottom:14px;'},['Последние заказы']));
+  const recentRows=allOrders.slice(0,8);
+  if(!recentRows.length){
+    content.appendChild(el('div',{cls:'dadm-empty'},['Нет заказов']));
+    return;
+  }
+  content.appendChild(buildDskTable('dashRecent',{
+    rows:recentRows,
+    getId:o=>o.id,
+    searchFn:()=>true,
+    columns:[
+      {key:'id',label:'№',sortable:true,sortVal:o=>o.id,render:o=>'№'+o.id},
+      {key:'date',label:'Дата',render:o=>o.date},
+      {key:'customer',label:'Клиент',render:o=>o.userName||'—'},
+      {key:'total',label:'Сумма',sortable:true,sortVal:o=>o.total,render:o=>o.total.toLocaleString('ru')+' ₽'},
+      {key:'status',label:'Статус',render:o=>{
+        const st=clientStatus(o.status); const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','rgba(128,128,128,.1)'];
+        return el('span',{cls:'dadm-status-pill',css:'background:'+c[1]+';color:'+c[0]+';'},[st]);
+      }},
+    ],
+    onRowClick:(o)=>{S._dadmTab='orders';S.adminDetail={_orderId:o.id};render();},
+  }));
+}
+
+// ── Заказы ───────────────────────────────────────────────────────
+function buildDskAdminOrders(content){
+  const allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+  if(S.adminDetail && S.adminDetail._orderId){
+    content.appendChild(buildDskOrderDetailPanel(S.adminDetail._orderId));
+  }
+
+  const statusFilter=document.createElement('select');
+  statusFilter.className='dadm-select';
+  if(!S._dskOrderStatusFilter) S._dskOrderStatusFilter='all';
+  [['all','Все статусы'],['needs_action','Требуют внимания'],['active','Активные'],['archive','Архив']].forEach(([v,l])=>{
+    const o=document.createElement('option');o.value=v;o.textContent=l;if(S._dskOrderStatusFilter===v)o.selected=true;statusFilter.appendChild(o);
+  });
+  statusFilter.onchange=()=>{S._dskOrderStatusFilter=statusFilter.value;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}};
+
+  let rows=allOrd;
+  if(S._dskOrderStatusFilter==='needs_action') rows=allOrd.filter(o=>o.payState==='waiting_requisites'||o.payState==='paid');
+  else if(S._dskOrderStatusFilter==='active') rows=allOrd.filter(o=>!['ЗАКРЫТ','ОТМЕНЁН','Завершён','Отменён'].includes(o.status));
+  else if(S._dskOrderStatusFilter==='archive') rows=allOrd.filter(o=>['ЗАКРЫТ','ОТМЕНЁН','Завершён','Отменён'].includes(o.status));
+
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Заказы']));
+  content.appendChild(buildDskTable('orders',{
+    rows, getId:o=>o.id,
+    searchPlaceholder:'Поиск по номеру, имени, телефону...',
+    searchFn:(o,q)=>String(o.id).includes(q)||(o.userName||'').toLowerCase().includes(q)||(o.userPhone||'').includes(q),
+    extraToolbar:[statusFilter],
+    columns:[
+      {key:'id',label:'№ заказа',sortable:true,sortVal:o=>o.id,render:o=>'№'+o.id},
+      {key:'date',label:'Дата',render:o=>o.date},
+      {key:'customer',label:'Клиент',render:o=>{
+        const d=document.createElement('div');
+        d.innerHTML='<div style="font-weight:600;">'+(o.userName||'—')+'</div><div style="font-size:11px;color:var(--txt3);">'+(o.userPhone||'—')+'</div>';
+        return d;
+      }},
+      {key:'total',label:'Сумма',sortable:true,sortVal:o=>o.total,render:o=>o.total.toLocaleString('ru')+' ₽'},
+      {key:'status',label:'Статус',render:o=>{
+        const ps=o.payState||'';
+        const needsAction=ps==='waiting_requisites'||ps==='paid';
+        const st=clientStatus(o.status);
+        const c=ORDER_COLORS[o.status]||ORDER_COLORS[st]||['var(--txt3)','rgba(128,128,128,.1)'];
+        const label=needsAction?(ps==='waiting_requisites'?'Нужны реквизиты':'Проверить оплату'):st;
+        return el('span',{cls:'dadm-status-pill',css:'background:'+(needsAction?'rgba(255,214,10,.15)':c[1])+';color:'+(needsAction?'var(--gold)':c[0])+';'},[label]);
+      }},
+    ],
+    bulkActions:[
+      {label:'Отметить "Доставляется"',onClick:(selRows)=>{
+        selRows.forEach(o=>{
+          o.status='Доставляется';o.payState='confirmed';
+          setLocalOrderState(o.id,{status:'Доставляется',payState:'confirmed'});
+          fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'set_order',orderId:String(o.id),data:{status:'Доставляется',payState:'confirmed'}})}).catch(()=>{});
+        });
+        addLog('Массовая смена статуса на "Доставляется"',selRows.length+' заказ(ов)');
+        showNotif('Обновлено: '+selRows.length,'✅');
+        getDskTableState('orders').selected=[];
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}
+      }},
+      {label:'Отменить',danger:true,onClick:(selRows)=>{
+        if(!confirm('Отменить '+selRows.length+' заказ(ов)?'))return;
+        selRows.forEach(o=>{
+          o.status='Отменён';o.payState='cancelled';
+          setLocalOrderState(o.id,{payState:'cancelled'});
+          fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({action:'set_order',orderId:String(o.id),data:{payState:'cancelled'}})}).catch(()=>{});
+        });
+        addLog('Массовая отмена заказов',selRows.length+' заказ(ов)');
+        showNotif('Отменено: '+selRows.length,'❌');
+        getDskTableState('orders').selected=[];
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}
+      }},
+    ],
+    onRowClick:(o)=>{S.adminDetail={_orderId:o.id};const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}},
+  }));
+}
+
+function buildDskOrderDetailPanel(ordId){
+  const allOrd=S.adminOrders.length?S.adminOrders:S.orders;
+  const o=allOrd.find(x=>String(x.id)===String(ordId));
+  const overlay=el('div',{cls:'dadm-detail-overlay',onClick:(e)=>{if(e.target===overlay){S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}}}});
+  const panel=el('div',{cls:'dadm-detail-panel'});
+  const head=el('div',{cls:'dadm-detail-head'});
+  head.appendChild(el('div',{css:'font-size:18px;font-weight:800;flex:1;'},['Заказ №'+ordId]));
+  head.appendChild(el('button',{css:'background:none;border:none;font-size:20px;color:var(--txt2);cursor:pointer;',onClick:()=>{S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}}},['✕']));
+  panel.appendChild(head);
+  const body=el('div',{cls:'dadm-detail-body'});
+  panel.appendChild(body);
+
+  if(!o){ body.appendChild(el('div',{cls:'dadm-empty'},['Заказ не найден'])); overlay.appendChild(panel); return overlay; }
+
+  body.appendChild(el('div',{css:'font-size:13px;color:var(--txt2);margin-bottom:16px;'},[o.date+' · '+o.address]));
+
+  const box=el('div',{css:'background:var(--bg3);border-radius:14px;padding:12px;margin-bottom:12px;'});
+  box.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);font-weight:700;margin-bottom:8px;letter-spacing:.5px;'},['СОСТАВ']));
+  Object.entries(o.items||{}).forEach(([id,qty])=>{
+    const p=[...FLOWERS,...GIFTS].find(f=>f.id==id);if(!p)return;
+    const r=el('div',{css:'display:flex;justify-content:space-between;padding:4px 0;font-size:13px;'});
+    r.appendChild(el('span',{},[(p.name||flName(p))+' × '+qty]));
+    r.appendChild(el('span',{css:'color:var(--accent);'},[(p.price*qty).toLocaleString('ru')+' ₽']));
+    box.appendChild(r);
+  });
+  const tot=el('div',{css:'display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:8px;padding-top:8px;'});
+  tot.appendChild(el('span',{css:'font-weight:700;'},['Итого']));
+  tot.appendChild(el('span',{css:'font-weight:800;color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽']));
+  box.appendChild(tot);
+  body.appendChild(box);
+
+  const cli=el('div',{css:'background:var(--bg3);border-radius:14px;padding:12px;margin-bottom:16px;'});
+  [['👤',o.userName||'—'],['📞',o.userPhone||'—'],['📍',o.address||'—'],['⏰',o.timeSlot||'—']].forEach(([ic,v])=>{
+    const r=el('div',{css:'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;'});
+    r.appendChild(el('span',{},[ic]));r.appendChild(el('span',{css:'font-weight:600;'},[v]));
+    cli.appendChild(r);
+  });
+  body.appendChild(cli);
+
+  const payState=o.payState||'waiting_requisites';
+  const refreshPanel=()=>{S.adminDetail={_orderId:ordId};const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminOrders(c);}};
+
+  if(payState==='waiting_requisites'){
+    const hd=el('div',{css:'background:rgba(255,214,10,.1);border:1.5px solid rgba(255,214,10,.4);border-radius:14px;padding:12px;text-align:center;margin-bottom:14px;'});
+    hd.appendChild(el('div',{css:'font-weight:800;color:var(--gold);'},['⏳ Ожидает реквизитов']));
+    body.appendChild(hd);
+    body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Банк']));
+    const bankSel=document.createElement('select');bankSel.className='inp';bankSel.style.marginBottom='10px';
+    BANKS.forEach(b=>{const opt=document.createElement('option');opt.value=b.id;opt.textContent=b.name;bankSel.appendChild(opt);});
+    body.appendChild(bankSel);
+    body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['ФИО получателя']));
+    const nameI=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Иван Иванов'});body.appendChild(nameI);
+    body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Телефон']));
+    const phoneI=el('input',{cls:'inp',css:'margin-bottom:16px;',placeholder:'+7 999 999-99-99'});body.appendChild(phoneI);
+    const btnRow=el('div',{css:'display:flex;gap:10px;'});
+    const sendB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
+      const bank=BANKS.find(b=>b.id===bankSel.value)||BANKS[0];
+      const nm=nameI.value.trim()||'Иван Иванов'; const ph=phoneI.value.trim()||'+7 999 000-00-00';
+      const upd={payState:'requisites_sent',payBankId:bank.id,payBank:bank.name,payName:nm,payPhone:ph,userTgId:o.userTgId||null,orderId:String(ordId)};
+      setLocalOrderState(ordId,upd);
+      try{await fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set_order',orderId:String(ordId),data:upd})});}catch(e){}
+      Object.assign(o,upd);o.status='Ожидаем оплаты';
+      addLog('Реквизиты отправлены по заказу №'+ordId,'Банк: '+bank.name);
+      notifyAdmin({action:'requisites_sent',orderId:String(ordId),bankName:bank.name});
+      save();showNotif('Реквизиты отправлены!','✅');refreshPanel();
+    }});sendB.textContent='💳 Отправить реквизиты';
+    const cancelB=el('button',{cls:'dadm-btn-sm danger',onClick:async()=>{
+      setLocalOrderState(ordId,{payState:'cancelled'});
+      try{await fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set_order',orderId:String(ordId),data:{payState:'cancelled'}})});}catch(e){}
+      o.status='Отменён';o.payState='cancelled';addLog('Заказ №'+ordId+' отменён администратором','');
+      save();showNotif('Заказ отменён','❌');refreshPanel();
+    }},['Отменить']);
+    btnRow.appendChild(sendB);btnRow.appendChild(cancelB);
+    body.appendChild(btnRow);
+  }else if(payState==='paid'){
+    const alert=el('div',{css:'background:rgba(255,214,10,.12);border:2px solid var(--gold);border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;'});
+    alert.appendChild(el('div',{css:'font-weight:800;color:var(--gold);'},['💰 ПОДТВЕРДИТЕ ОПЛАТУ']));
+    body.appendChild(alert);
+    const btnRow=el('div',{css:'display:flex;gap:10px;'});
+    const confB=el('button',{cls:'btn-prim',css:'flex:1;',onClick:async()=>{
+      setLocalOrderState(ordId,{payState:'confirmed'});
+      o.status='Доставляется';o.payState='confirmed';
+      addLog('Оплата подтверждена по заказу №'+ordId,'');
+      notifyAdmin({action:'order_confirmed',orderId:String(ordId)});
+      save();showNotif('Оплата подтверждена!','✅');refreshPanel();
+    }},['✅ Деньги получены']);
+    const cancelB=el('button',{cls:'dadm-btn-sm danger',onClick:()=>{
+      setLocalOrderState(ordId,{payState:'cancelled'});o.status='Отменён';o.payState='cancelled';
+      addLog('Оплата отклонена по заказу №'+ordId,'');save();showNotif('Заказ отменён','❌');refreshPanel();
+    }},['Отменить']);
+    btnRow.appendChild(confB);btnRow.appendChild(cancelB);
+    body.appendChild(btnRow);
+  }else{
+    const c=ORDER_COLORS[o.status]||['var(--txt2)','rgba(128,128,128,.1)'];
+    const hd=el('div',{css:'background:'+c[1]+';border:1px solid '+c[0]+'44;border-radius:14px;padding:12px;text-align:center;margin-bottom:14px;'});
+    hd.appendChild(el('div',{css:'font-weight:700;color:'+c[0]+';'},[clientStatus(o.status)]));
+    body.appendChild(hd);
+  }
+
+  body.appendChild(el('div',{css:'font-size:11px;color:var(--txt3);font-weight:700;margin:16px 0 8px;letter-spacing:.5px;'},['СМЕНИТЬ СТАТУС']));
+  const stRow=el('div',{css:'display:flex;gap:6px;flex-wrap:wrap;'});
+  ORDER_STATUSES.forEach(st=>{
+    const active=o.status===st;
+    const b=el('button',{css:'padding:6px 12px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid '+(active?'var(--accent)':'var(--border2)')+';background:'+(active?'rgba(238,158,35,.15)':'transparent')+';color:'+(active?'var(--accent)':'var(--txt3)')+';',
+      onClick:async()=>{
+        const old=o.status;o.status=st;
+        addLog('Статус заказа №'+o.id+': '+old+' → '+st,'');
+        if(st==='ЗАКРЫТ'&&S.user&&!o._pointsGiven){o._pointsGiven=true;}
+        const kvUpd={status:st};
+        if(st==='ОТМЕНЁН'||st==='Отменён'){o.payState='cancelled';kvUpd.payState='cancelled';}
+        else if(st==='ЗАКРЫТ'||st==='Завершён'||st==='Доставляется'){kvUpd.payState='confirmed';}
+        setLocalOrderState(o.id,kvUpd);
+        try{await fetch('/api/order-state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set_order',orderId:String(o.id),data:{...kvUpd,_statusUpdate:Date.now()}})});}catch(e){}
+        save();refreshPanel();
+      }},[st]);
+    stRow.appendChild(b);
+  });
+  body.appendChild(stRow);
+
+  overlay.appendChild(panel);
+  return overlay;
+}
+
+// ── Клиенты ──────────────────────────────────────────────────────
+function buildDskAdminUsers(content){
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Клиенты']));
+  const users=S.adminUsers.length?S.adminUsers:(S.user?[S.user]:[]);
+
+  if(S.adminDetail && S.adminDetail._userName){
+    content.appendChild(buildDskUserDetailPanel(S.adminDetail._userName, users));
+  }
+
+  content.appendChild(buildDskTable('users',{
+    rows:users, getId:u=>u.name,
+    searchPlaceholder:'Поиск по имени, телефону...',
+    searchFn:(u,q)=>(u.name||'').toLowerCase().includes(q)||(u.phone||'').includes(q),
+    columns:[
+      {key:'name',label:'Имя',sortable:true,sortVal:u=>u.name||'',render:u=>u.name||'—'},
+      {key:'phone',label:'Телефон',render:u=>u.phone||'—'},
+      {key:'orders',label:'Заказов',sortable:true,sortVal:u=>S.orders.filter(o=>o.userName===u.name).length,
+        render:u=>String(S.orders.filter(o=>o.userName===u.name).length)},
+    ],
+    bulkActions:[
+      {label:'Удалить',danger:true,onClick:(selRows)=>{
+        if(!confirm('Удалить '+selRows.length+' клиент(ов)? Действие необратимо.'))return;
+        selRows.forEach(u=>{addLog('Удалён аккаунт: '+u.name,'');});
+        S.adminUsers=S.adminUsers.filter(u=>!selRows.includes(u));
+        showNotif('Удалено: '+selRows.length,'🗑');
+        getDskTableState('users').selected=[];
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}
+      }},
+    ],
+    onRowClick:(u)=>{S.adminDetail={_userName:u.name};const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}},
+  }));
+}
+
+function buildDskUserDetailPanel(name, users){
+  const u=users.find(x=>x.name===name);
+  const overlay=el('div',{cls:'dadm-detail-overlay',onClick:(e)=>{if(e.target===overlay){S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}}}});
+  const panel=el('div',{cls:'dadm-detail-panel'});
+  const head=el('div',{cls:'dadm-detail-head'});
+  head.appendChild(el('div',{css:'font-size:18px;font-weight:800;flex:1;'},[name]));
+  head.appendChild(el('button',{css:'background:none;border:none;font-size:20px;color:var(--txt2);cursor:pointer;',onClick:()=>{S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}}},['✕']));
+  panel.appendChild(head);
+  const body=el('div',{cls:'dadm-detail-body'});
+  panel.appendChild(body);
+  if(!u){body.appendChild(el('div',{cls:'dadm-empty'},['Клиент не найден']));overlay.appendChild(panel);return overlay;}
+
+  body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Имя']));
+  const nameI=el('input',{cls:'inp',css:'margin-bottom:10px;'});nameI.value=u.name;body.appendChild(nameI);
+  body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;'},['Телефон']));
+  const phoneI=el('input',{cls:'inp',css:'margin-bottom:16px;'});phoneI.value=u.phone||'';body.appendChild(phoneI);
+  const sv=el('button',{cls:'btn-prim',css:'margin-bottom:10px;',onClick:()=>{
+    u.name=nameI.value||u.name;u.phone=phoneI.value;
+    addLog('Изменены данные: '+u.name,'');save();showNotif('Сохранено','✅');
+    const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}
+  }},['Сохранить']);
+  body.appendChild(sv);
+
+  const userOrders=S.orders.filter(o=>o.userName===u.name);
+  body.appendChild(el('div',{css:'font-size:14px;font-weight:700;margin-top:16px;margin-bottom:8px;'},['Заказы ('+userOrders.length+')']));
+  userOrders.slice(0,8).forEach(o=>{
+    const r=el('div',{css:'background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:13px;cursor:pointer;',
+      onClick:()=>{S._dadmTab='orders';S.adminDetail={_orderId:o.id};render();}});
+    r.appendChild(el('span',{},['Заказ №'+o.id]));
+    r.appendChild(el('span',{css:'color:var(--accent);'},[o.total.toLocaleString('ru')+' ₽ · '+clientStatus(o.status)]));
+    body.appendChild(r);
+  });
+
+  const delAccB=el('button',{css:'width:100%;margin-top:20px;padding:12px;border-radius:14px;border:1.5px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-weight:700;cursor:pointer;',
+    onClick:()=>{
+      if(!confirm('Удалить аккаунт '+u.name+'?'))return;
+      addLog('Удалён аккаунт: '+u.name,'');
+      if(S.user&&S.user.name===u.name){S.user=null;S.orders=[];S.cart={};S.chats=[];}
+      S.adminUsers=S.adminUsers.filter(x=>x.name!==u.name);
+      save();showNotif('Аккаунт удалён','🗑');S.adminDetail=null;
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminUsers(c);}
+    }},['🗑 Удалить аккаунт']);
+  body.appendChild(delAccB);
+
+  overlay.appendChild(panel);
+  return overlay;
+}
+
+// ── Каталог ──────────────────────────────────────────────────────
+function buildDskAdminCatalog(content){
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Каталог']));
+
+  if(S.adminDetail && S.adminDetail._editItem){
+    content.appendChild(buildDskCatalogEditPanel(S.adminDetail._editItem));
+  }
+
+  const addRow=el('div',{cls:'dadm-toolbar'});
+  const addB=el('button',{cls:'dadm-btn-sm',css:'background:rgba(238,158,35,.12);border-color:rgba(238,158,35,.4);color:var(--accent);',
+    onClick:()=>{
+      const newItem={id:Date.now(),type:'Роза',p:'',h:60,color:'',price:1000,e:'🌸',tags:[],desc:'',rating:5,sold:0};
+      FLOWERS.push(newItem);S.adminDetail={_editItem:newItem};
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}
+    }},['+ Добавить товар']);
+  addRow.appendChild(addB);
+  content.appendChild(addRow);
+
+  const allProducts=[...FLOWERS.map(p=>({...p,_sec:'f'})),...GIFTS.map(p=>({...p,_sec:'g'}))];
+  content.appendChild(buildDskTable('catalog',{
+    rows:allProducts, getId:p=>p._sec+'_'+p.id,
+    searchPlaceholder:'Поиск по названию, типу...',
+    searchFn:(p,q)=>(p.name||flName(p)||'').toLowerCase().includes(q)||(p.type||'').toLowerCase().includes(q),
+    columns:[
+      {key:'img',label:'',width:'56px',render:p=>{
+        const img=document.createElement('img');img.className='dadm-thumb';img.src=p.imgUrl||'';img.alt='';
+        img.onerror=()=>{img.style.opacity='0';};
+        return img;
+      }},
+      {key:'name',label:'Название',sortable:true,sortVal:p=>p.name||flName(p),render:p=>p.name||flName(p)},
+      {key:'sec',label:'Раздел',render:p=>p._sec==='f'?'Цветы':'Подарки'},
+      {key:'price',label:'Цена',sortable:true,sortVal:p=>p.price,render:p=>p.price.toLocaleString('ru')+' ₽'},
+      {key:'sold',label:'Продано',sortable:true,sortVal:p=>p.sold||0,render:p=>String(p.sold||0)},
+    ],
+    bulkActions:[
+      {label:'Удалить',danger:true,onClick:(selRows)=>{
+        if(!confirm('Удалить '+selRows.length+' товар(ов)?'))return;
+        selRows.forEach(p=>{
+          if(p._sec==='f'){const i=FLOWERS.findIndex(x=>x.id===p.id);if(i>=0)FLOWERS.splice(i,1);}
+          else{const i=GIFTS.findIndex(x=>x.id===p.id);if(i>=0)GIFTS.splice(i,1);}
+          addLog('Удалён товар: '+(p.name||flName(p)),'');
+        });
+        showNotif('Удалено: '+selRows.length,'🗑');
+        getDskTableState('catalog').selected=[];
+        fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'set',flowers:FLOWERS,gifts:GIFTS})}).catch(()=>{});
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}
+      }},
+    ],
+    onRowClick:(p)=>{
+      const item=(p._sec==='f'?FLOWERS:GIFTS).find(x=>x.id===p.id);
+      S.adminDetail={_editItem:item};
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}
+    },
+  }));
+}
+
+function buildDskCatalogEditPanel(item){
+  const isFlower=FLOWERS.includes(item);
+  const overlay=el('div',{cls:'dadm-detail-overlay',onClick:(e)=>{if(e.target===overlay){S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}}}});
+  const panel=el('div',{cls:'dadm-detail-panel'});
+  const head=el('div',{cls:'dadm-detail-head'});
+  head.appendChild(el('div',{css:'font-size:18px;font-weight:800;flex:1;'},['Редактировать товар']));
+  head.appendChild(el('button',{css:'background:none;border:none;font-size:20px;color:var(--txt2);cursor:pointer;',onClick:()=>{S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}}},['✕']));
+  panel.appendChild(head);
+  const body=el('div',{cls:'dadm-detail-body'});
+  panel.appendChild(body);
+
+  const fields=isFlower?[['Тип',item,'type'],['Плантация',item,'p'],['Рост',item,'h'],['Цвет',item,'color'],['Цена',item,'price'],['Описание',item,'desc']]:
+    [['Название',item,'name'],['Тип',item,'type'],['Цена',item,'price'],['Описание',item,'desc']];
+  const inputs={};
+  fields.forEach(([lb,,k])=>{
+    body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-bottom:5px;margin-top:10px;'},[lb]));
+    const inp=el('input',{cls:'inp',placeholder:lb});inp.value=item[k]||'';inputs[k]=inp;body.appendChild(inp);
+  });
+  body.appendChild(el('div',{cls:'inp-label',css:'display:block;margin-top:10px;margin-bottom:5px;'},['Теги (через запятую)']));
+  const tagI=el('input',{cls:'inp',placeholder:'Тег1, Тег2'});tagI.value=(item.tags||[]).join(', ');body.appendChild(tagI);
+
+  if(item.imgUrl && item.imgUrl!=='__kv__'){
+    body.appendChild(el('img',{src:item.imgUrl,css:'width:80px;height:80px;border-radius:12px;object-fit:cover;margin-top:12px;'}));
+  }
+  const fileInp=document.createElement('input');fileInp.type='file';fileInp.accept='image/*';fileInp.style.marginTop='10px';
+  fileInp.onchange=async(e)=>{
+    const f=e.target.files[0];if(!f)return;
+    const bmp=await createImageBitmap(f).catch(()=>null);
+    let imgData;
+    if(bmp){const MAX=800;const scale=Math.min(1,MAX/Math.max(bmp.width,bmp.height));const cv=document.createElement('canvas');cv.width=Math.round(bmp.width*scale);cv.height=Math.round(bmp.height*scale);cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);imgData=cv.toDataURL('image/jpeg',.82);}
+    else{const r2=new FileReader();imgData=await new Promise(res=>{r2.onload=()=>res(r2.result);r2.readAsDataURL(f);});}
+    item.imgUrl=imgData;
+    try{
+      const resp=await fetch('/api/images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'upload',itemId:String(item.id),imgData})});
+      const d=await resp.json();
+      if(d.ok){
+        item.imgKey='img:'+String(item.id);
+        const catalogFlowers=FLOWERS.map(p=>({...p,imgUrl:p.imgKey?'__kv__':''}));
+        const catalogGifts=GIFTS.map(p=>({...p,imgUrl:p.imgKey?'__kv__':''}));
+        fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set',flowers:catalogFlowers,gifts:catalogGifts})}).catch(()=>{});
+        showNotif('Фото загружено','✅');
+      }
+    }catch(ex){showNotif('Ошибка сети','⚠️');}
+  };
+  body.appendChild(fileInp);
+
+  const sv=el('button',{cls:'btn-prim',css:'margin-top:16px;width:100%;',onClick:async()=>{
+    Object.entries(inputs).forEach(([k,inp])=>{if(inp.value)item[k]=isNaN(inp.value)?inp.value:+inp.value;});
+    item.tags=tagI.value.split(',').map(t=>t.trim()).filter(Boolean);
+    addLog('Изменён товар: '+(item.name||flName(item)),'');
+    const stripImg=p=>({...p,imgUrl:(p.imgKey||p.imgUrl==='__kv__')?'__kv__':(p.imgUrl&&p.imgUrl.startsWith('data:')?'':p.imgUrl)});
+    sv.disabled=true;sv.textContent='Сохраняем...';
+    try{await fetch('/api/catalog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set',flowers:FLOWERS.map(stripImg),gifts:GIFTS.map(stripImg)})});}catch(e){}
+    sv.disabled=false;sv.textContent='Сохранить';
+    save();showNotif('Сохранено','✅');
+    const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}
+  }},['Сохранить']);
+  body.appendChild(sv);
+
+  const del=el('button',{css:'width:100%;margin-top:10px;padding:12px;border-radius:14px;border:1.5px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-weight:700;cursor:pointer;',
+    onClick:()=>{
+      if(isFlower){const i=FLOWERS.indexOf(item);if(i>=0)FLOWERS.splice(i,1);}
+      else{const i=GIFTS.indexOf(item);if(i>=0)GIFTS.splice(i,1);}
+      addLog('Удалён товар: '+(item.name||flName(item)),'');
+      S.adminDetail=null;
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminCatalog(c);}
+    }},['🗑 Удалить товар']);
+  body.appendChild(del);
+
+  overlay.appendChild(panel);
+  return overlay;
+}
+
+// ── Логи ─────────────────────────────────────────────────────────
+function buildDskAdminLogs(content){
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Логи']));
+
+  const exportPayload=()=>({
+    logs: LOGS, orders: S.adminOrders.length?S.adminOrders:S.orders,
+    users: S.adminUsers, sellers: S.adminSellers||[], chats: S.adminChats.length?S.adminChats:S.chats
+  });
+  const expRow=el('div',{cls:'dadm-toolbar'});
+  const tgBtn=el('button',{cls:'dadm-btn-sm',onClick:async()=>{
+    tgBtn.disabled=true;tgBtn.textContent='Отправляем...';
+    try{const r=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...exportPayload(),sendToTelegram:true})});
+      const d=await r.json();showNotif(d.ok?'Файл отправлен в Telegram':'Ошибка отправки',d.ok?'✅':'❌');}catch(e){showNotif('Ошибка экспорта','❌');}
+    tgBtn.disabled=false;tgBtn.textContent='📤 Отправить в Telegram';
+  }},['📤 Отправить в Telegram']);
+  const dlBtn=el('button',{cls:'dadm-btn-sm',onClick:async()=>{
+    dlBtn.disabled=true;dlBtn.textContent='Готовим...';
+    try{
+      const r=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...exportPayload(),download:true})});
+      const blob=await r.blob();const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='venets_export_'+new Date().toISOString().slice(0,10)+'.xlsx';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+      showNotif('Файл скачан','✅');
+    }catch(e){showNotif('Ошибка скачивания','❌');}
+    dlBtn.disabled=false;dlBtn.textContent='💾 Скачать .xlsx';
+  }},['💾 Скачать .xlsx']);
+  expRow.appendChild(tgBtn);expRow.appendChild(dlBtn);
+  content.appendChild(expRow);
+
+  content.appendChild(buildDskTable('logs',{
+    rows:LOGS, getId:(l,i)=>LOGS.indexOf(l),
+    searchPlaceholder:'Поиск по действию...',
+    searchFn:(l,q)=>(l.action||'').toLowerCase().includes(q)||(l.detail||'').toLowerCase().includes(q),
+    emptyText:'Нет операций',
+    columns:[
+      {key:'action',label:'Действие',render:l=>{
+        const d=document.createElement('div');
+        d.innerHTML='<div style="font-weight:600;">'+l.action+'</div>'+(l.detail?'<div style="font-size:11px;color:var(--txt3);margin-top:2px;">'+l.detail+'</div>':'');
+        return d;
+      }},
+      {key:'ts',label:'Когда',width:'170px',render:l=>l.ts},
+      {key:'admin',label:'Кто',width:'110px',render:l=>l.admin},
+    ],
+  }));
+}
+
+// ── Продавцы ─────────────────────────────────────────────────────
+function buildDskAdminSellers(content){
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Продавцы']));
+  if(!S._sellersLoaded){
+    S._sellersLoaded=true;
+    loadAdminSellers().then(()=>{
+      const c=document.getElementById('dadm-content');
+      if(c && S._dadmTab==='sellers'){c.innerHTML='';buildDskAdminSellers(c);}
+    });
+  }
+  const sellers=S.adminSellers||[];
+
+  if(S.adminDetail && typeof S.adminDetail==='string' && S.adminDetail.startsWith('seller:')){
+    content.appendChild(buildDskSellerDetailPanel(S.adminDetail.slice(7), sellers));
+  }
+
+  content.appendChild(buildDskTable('sellers',{
+    rows:sellers, getId:s=>s.login,
+    searchPlaceholder:'Поиск по названию магазина...',
+    searchFn:(s,q)=>(s.shopName||'').toLowerCase().includes(q)||(s.login||'').toLowerCase().includes(q),
+    emptyText:'Пока нет зарегистрированных продавцов',
+    columns:[
+      {key:'shop',label:'Магазин',sortable:true,sortVal:s=>s.shopName||'',render:s=>s.shopName||'—'},
+      {key:'segment',label:'Сегмент',render:s=>s.segment||'—'},
+      {key:'phone',label:'Телефон',render:s=>s.phone||'—'},
+      {key:'status',label:'Статус',render:s=>{
+        const active=s.status!=='blocked';
+        return el('span',{cls:'dadm-status-pill',css:'background:'+(active?'rgba(48,209,88,.15)':'rgba(255,55,95,.15)')+';color:'+(active?'var(--green)':'var(--pink)')+';'},[active?'Активен':'Заблокирован']);
+      }},
+    ],
+    onRowClick:(s)=>{S.adminDetail='seller:'+s.login;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminSellers(c);}},
+  }));
+}
+
+function buildDskSellerDetailPanel(login, sellers){
+  const s=sellers.find(x=>x.login===login);
+  const overlay=el('div',{cls:'dadm-detail-overlay',onClick:(e)=>{if(e.target===overlay){S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminSellers(c);}}}});
+  const panel=el('div',{cls:'dadm-detail-panel'});
+  const head=el('div',{cls:'dadm-detail-head'});
+  head.appendChild(el('div',{css:'font-size:18px;font-weight:800;flex:1;'},[s?s.shopName:'Магазин']));
+  head.appendChild(el('button',{css:'background:none;border:none;font-size:20px;color:var(--txt2);cursor:pointer;',onClick:()=>{S.adminDetail=null;const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminSellers(c);}}},['✕']));
+  panel.appendChild(head);
+  const body=el('div',{cls:'dadm-detail-body'});
+  panel.appendChild(body);
+  if(!s){body.appendChild(el('div',{cls:'dadm-empty'},['Магазин не найден']));overlay.appendChild(panel);return overlay;}
+
+  const infoGrid=el('div',{css:'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;'});
+  [['ИНН',s.inn||'—'],['Телефон',s.phone||'—'],['Адрес',s.address||'—'],['Сегмент',s.segment||'—']].forEach(([lb,v])=>{
+    const c=el('div',{css:'background:var(--bg3);border-radius:12px;padding:10px;'});
+    c.appendChild(el('div',{css:'font-size:10px;color:var(--txt3);margin-bottom:3px;'},[lb]));
+    c.appendChild(el('div',{css:'font-size:13px;font-weight:700;'},[v]));
+    infoGrid.appendChild(c);
+  });
+  body.appendChild(infoGrid);
+
+  body.appendChild(el('div',{css:'font-size:13px;font-weight:700;margin-bottom:8px;'},['Ассортимент']));
+  const flWrap=el('div',{css:'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;'});
+  (s.flowers||[]).forEach(f=>flWrap.appendChild(el('div',{css:'padding:5px 12px;border-radius:100px;background:rgba(238,158,35,.12);border:1px solid rgba(238,158,35,.3);font-size:12px;color:var(--accent);'},[f])));
+  body.appendChild(flWrap);
+
+  body.appendChild(el('div',{css:'font-size:14px;font-weight:800;margin-bottom:10px;'},['Доступ']));
+  const loginI=el('input',{cls:'inp',css:'margin-bottom:8px;',placeholder:'Логин'});loginI.value=s.login;body.appendChild(loginI);
+  const passI=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Пароль'});passI.value=s.password||'';body.appendChild(passI);
+  const saveAccB=el('button',{cls:'btn-prim',css:'margin-bottom:10px;',onClick:async()=>{
+    try{
+      await fetch('/api/seller',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'admin_update_seller',login:s.login,newLogin:loginI.value,newPassword:passI.value})});
+      showNotif('Сохранено','✅');S._sellersLoaded=false;
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminSellers(c);}
+    }catch(e){showNotif('Ошибка','❌');}
+  }},['Сохранить доступ']);
+  body.appendChild(saveAccB);
+
+  const blockB=el('button',{css:'width:100%;margin-top:14px;padding:12px;border-radius:14px;border:1.5px solid rgba(255,55,95,.4);background:rgba(255,55,95,.08);color:var(--pink);font-weight:700;cursor:pointer;',
+    onClick:async()=>{
+      if(!confirm('Заблокировать магазин '+s.shopName+'?'))return;
+      try{
+        await fetch('/api/seller',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'admin_block_seller',login:s.login})});
+        addLog('Заблокирован продавец: '+s.shopName,'');showNotif('Магазин заблокирован','🚫');
+        S._sellersLoaded=false;S.adminDetail=null;
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminSellers(c);}
+      }catch(e){}
+    }},['🚫 Заблокировать магазин']);
+  body.appendChild(blockB);
+
+  overlay.appendChild(panel);
+  return overlay;
+}
+
+// ── Чаты (двухпанельный inbox) ──────────────────────────────────
+function buildDskAdminChats(content){
+  content.appendChild(el('div',{cls:'dadm-topbar-title',css:'margin-bottom:16px;'},['Поддержка']));
+  const chatList=S.adminChats.length?S.adminChats:S.chats;
+  if(!S._dskActiveChatId && chatList.length) S._dskActiveChatId=chatList[0].id;
+
+  const layout=el('div',{cls:'dadm-chat-layout'});
+  const listCol=el('div',{cls:'dadm-chat-list'});
+  if(!chatList.length){
+    listCol.appendChild(el('div',{cls:'dadm-empty'},['Нет обращений']));
+  }
+  chatList.forEach(chat=>{
+    const active=String(S._dskActiveChatId)===String(chat.id);
+    const item=el('div',{cls:'dadm-chat-list-item'+(active?' active':''),onClick:()=>{
+      S._dskActiveChatId=chat.id;
+      const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminChats(c);}
+    }});
+    const top=el('div',{css:'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;'});
+    top.appendChild(el('span',{css:'font-size:13px;font-weight:700;'},[chat.topic]));
+    top.appendChild(el('span',{css:'font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:'+(chat.status==='Активный'?'rgba(48,209,88,.15)':'rgba(100,100,130,.2)')+';color:'+(chat.status==='Активный'?'var(--green)':'var(--txt3)')+';'},[chat.status]));
+    item.appendChild(top);
+    const last=chat.msgs[chat.msgs.length-1];
+    if(last)item.appendChild(el('div',{css:'font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'},[(last.from==='user'?'Клиент: ':'')+(last.text||'Фото')]));
+    listCol.appendChild(item);
+  });
+  layout.appendChild(listCol);
+
+  const detailCol=el('div',{cls:'dadm-chat-detail'});
+  const activeChat=chatList.find(c=>String(c.id)===String(S._dskActiveChatId));
+  if(!activeChat){
+    detailCol.appendChild(el('div',{cls:'dadm-empty',css:'margin:auto;'},['Выберите обращение']));
+  }else{
+    const dHead=el('div',{cls:'dadm-detail-head'});
+    dHead.appendChild(el('div',{css:'font-size:15px;font-weight:800;flex:1;'},[activeChat.topic+(activeChat.orderId?' · Заказ №'+activeChat.orderId:'')]));
+    if(activeChat.status==='Активный'){
+      dHead.appendChild(el('button',{cls:'dadm-btn-sm danger',onClick:()=>{
+        activeChat.status='Закрыт';addLog('Чат закрыт: '+activeChat.topic,'');save();apiCall({action:'close_chat',chatId:activeChat.id});
+        const c=document.getElementById('dadm-content');if(c){c.innerHTML='';buildDskAdminChats(c);}
+      }},['Закрыть чат']));
+    }
+    detailCol.appendChild(dHead);
+    const msgs=el('div',{cls:'dadm-chat-msgs'});
+    activeChat.msgs.forEach(m=>{
+      const bub=el('div',{cls:'msg-bubble '+(m.from==='admin'?'msg-out':'msg-in'),css:'max-width:75%;'+(m.from==='admin'?'align-self:flex-end;':'align-self:flex-start;')});
+      bub.appendChild(txt(m.text||''));
+      msgs.appendChild(bub);
+    });
+    detailCol.appendChild(msgs);
+    if(activeChat.status==='Активный'){
+      const inputRow=el('div',{cls:'dadm-chat-input-row'});
+      const inp=el('input',{cls:'inp',css:'flex:1;',placeholder:'Ответить...'});
+      const sendB=el('button',{cls:'btn-prim',css:'width:auto;padding:12px 20px;',onClick:()=>{
+        if(!inp.value.trim())return;
+        const msgText=inp.value.trim();
+        activeChat.msgs.push({from:'admin',text:msgText,time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}),unread:true});
+        save();apiCall({action:'admin_reply',chatId:activeChat.id,userTgId:activeChat.userTgId||null,msg:msgText});
+        inp.value='';
+        const bub=el('div',{cls:'msg-bubble msg-out',css:'max-width:75%;align-self:flex-end;'});bub.appendChild(txt(msgText));
+        msgs.appendChild(bub);msgs.scrollTop=msgs.scrollHeight;
+      }});
+      inputRow.appendChild(inp);inputRow.appendChild(sendB);
+      detailCol.appendChild(inputRow);
+    }
+  }
+  layout.appendChild(detailCol);
+  content.appendChild(layout);
 }
 
 
@@ -3426,8 +4396,8 @@ function buildMainContent(scr){
 // ADMIN LOGIN
 // ══════════════════════════════════════════
 function buildAdminLogin(){
-  const d=el('div',{css:'position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;'});
-  d.appendChild(el('div',{css:'font-size:48px;margin-bottom:16px;'},['']));
+  const d=el('div',{cls:'admin-login-page',css:'position:fixed;inset:0;z-index:600;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;'});
+  d.appendChild(el('div',{css:'font-size:48px;margin-bottom:16px;'},['\uD83D\uDD10']));
   d.appendChild(el('div',{css:'font-size:24px;font-weight:800;margin-bottom:24px;text-align:center;'},['Администратор']));
   const loginI=el('input',{cls:'inp',css:'margin-bottom:10px;',placeholder:'Логин'});
   const passI=el('input',{cls:'inp',type:'password',css:'margin-bottom:20px;',placeholder:'Пароль'});
